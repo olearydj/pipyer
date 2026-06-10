@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.json
+
+# Env
+.env
+.envrc
+
+# OS
+.DS_Store
+
+# Runs (local evidence; revisit when run-record layout settles)
+runs/
