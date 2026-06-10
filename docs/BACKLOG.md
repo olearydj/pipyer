@@ -33,4 +33,6 @@ External CLI orchestration as components: a workflow drives `twc-bridge` subcomm
 
 ## Deferred (Post-V1)
 
-Campaign semantics (ADR-006). DocETL, Inspect, DSPy integrations. promptfoo adapter. HTTP and human-checkpoint components. Anything not demanded by a named consumer.
+Campaign semantics (ADR-006). DocETL, Inspect, DSPy integrations. promptfoo adapter. HTTP component. Anything not demanded by a named consumer.
+
+Two deferred items now have a named future consumer (an agentic-wargaming experiment harness over a military simulator, currently blocked on simulator access): the human-checkpoint component (its inner loop gates LLM-authored experiment batches behind human or policy approval before execution) and a run-budget setting (a bounded budget of simulation runs as a first-class constraint, distinct from failure budgets). Both enter scope when that consumer unblocks, not before. Design note recorded with ADR-006's amendment in the vault: model influence on what runs next enters only between runs, as gated, validated, recorded workflow data - never as within-run control flow.
