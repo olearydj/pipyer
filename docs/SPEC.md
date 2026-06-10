@@ -75,6 +75,10 @@ Core v1 components: `file_read`, `file_write`, `shell`, `llm` (PydanticAI), `llm
 
 Everything else is composition, not reimplementation: existing CLIs run as `shell` components (the proven pattern: markdown-with-frontmatter payloads, dry-run gates on writes, idempotent posts); agent harnesses may be invoked inside a step (for example `claude -p`) without owning topology; DocETL, Inspect, and DSPy remain post-v1 integration candidates invoked as engines.
 
+### Practicalities
+
+Python 3.12+, Pydantic v2, PydanticAI current stable; managed with `uv` exclusively. Secrets (provider API keys) come from environment variables only; workflow files never contain credentials. Local-first: no hosted services required to run.
+
 ## 9. V1 Definition and Success Criteria
 
 V1 is defined by three consumers; a feature enters v1 only when one needs it:
