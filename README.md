@@ -2,17 +2,24 @@
 
 Pipyer is a deterministic orchestration tool for reproducible LLM pipelines: the workflow controls what happens; the model works inside the steps. Declarative data defines the shape, Python and shell do the deterministic work, LLMs supply judgment within steps, and every run leaves a complete evidence record (inputs, outputs, failures, cost) that supports resume, comparison, and improvement.
 
-Status: pre-implementation. The consolidated base specification is `docs/SPEC.md`; the feature sequence is `docs/BACKLOG.md`; the entry-gate spike is `docs/SPIKE.md`.
+Status: Feature 001 complete (2026-06-11) - the workflow and run-record contracts exist as code with a passing conformance suite, `pipyer validate` works, the PydanticAI capability spike confirmed the standalone-runner boundary (T013 gate: GO), and the GradeBot fixture passed the workflows-are-data falsification census. Feature 002 (the runner) is next.
 
-## Bootstrap (First Session)
+## Orientation
 
-This repo is scaffolded for spec-driven development with [spec-kit](https://github.com/github/spec-kit):
+- Constitution: `.specify/memory/constitution.md` (v2.1.0) - binds all features.
+- Sprint 01 source material: `docs/sprint-01/` (base spec, feature backlog, spike plan); full record in `specs/001-pydanticai-spike-contracts/` (spike report, exit notes, plan, research R1-R14).
+- Sprint 02 source material: `docs/sprint-02/BRIEF.md` - feeds `/speckit.specify` for Feature 002.
+- Process: spec-driven with [spec-kit](https://github.com/github/spec-kit); each phase output gets a cross-session review; gates are never self-graded.
 
-1. `specify init . --integration <claude|codex>` (or both).
-2. `/speckit.constitution` - generate the constitution from the Philosophy and Decision Record sections of `docs/SPEC.md`. Transcribe decided content; do not re-explore.
-3. `/speckit.specify` for feature 001 from `docs/BACKLOG.md` (spike plus contracts), then `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`.
+Try it:
 
-Python tooling: `uv` only (never pip). Project not yet initialized; `uv init` is part of feature 001.
+```bash
+uv sync
+uv run pipyer validate tests/fixtures/gradebot/workflow.yaml
+uv run pytest -q
+```
+
+Python tooling: `uv` only (never pip); build backend `uv_build`; ruff + ty.
 
 ## Lineage
 

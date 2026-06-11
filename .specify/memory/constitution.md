@@ -4,7 +4,7 @@
   - Operational Constraints, stack: added uv_build backend, typer for CLIs, ruff for format/lint, ty for type checking (owner standards; rationale and reference implementations recorded in feature-001 research R13).
   - Operational Constraints, secrets: environment-only replaced by the household 1Password pattern (op read with env fallback, provider chain auto/1password/env), shipped twice in twc-bridge and danvas (research R14). Load-bearing rule unchanged: never in workflow files or run records; provenance (which provider) recordable, value never. MINOR bump: materially expanded guidance, no principle changed.
 - Prior entry: 1.1.0 → 2.0.0
-- Amendment (2026-06-10, post-feature-001-spec review): removed specification-level detail now owned by docs/SPEC.md sections 5-7 and specs/001-pydanticai-spike-contracts/spec.md:
+- Amendment (2026-06-10, post-feature-001-spec review): removed specification-level detail now owned by docs/sprint-01/SPEC.md sections 5-7 and specs/001-pydanticai-spike-contracts/spec.md:
   - Principle II: per-item mechanism enumeration (FR-013 guarantees uniformity by construction)
   - Principle III: record formats and cost-field list (FR-015, FR-016)
   - Principle V: restated execution-semantics list (SPEC section 6 bound by reference; FR-017)
@@ -34,7 +34,7 @@
 
 # Pipyer Constitution
 
-Pipyer is a deterministic orchestration tool: the workflow controls what happens; the model works inside the steps. This constitution binds all features, plans, and implementations. Source material: `docs/SPEC.md` (consolidated 2026-06-10), `docs/BACKLOG.md`, `docs/SPIKE.md`.
+Pipyer is a deterministic orchestration tool: the workflow controls what happens; the model works inside the steps. This constitution binds all features, plans, and implementations. Source material: `docs/sprint-01/SPEC.md` (consolidated 2026-06-10), `docs/sprint-01/BACKLOG.md`, `docs/sprint-01/SPIKE.md`.
 
 ## Core Principles
 
@@ -93,14 +93,14 @@ A feature enters scope only when a named consumer needs it (ADR-005). V1 consume
 ## Operational Constraints
 
 - Stack: Python 3.12+, Pydantic v2, PydanticAI current stable. Dependencies are managed with `uv` exclusively; `pip` and `uv pip` MUST NOT be used. Build backend is `uv_build`. CLIs are built with typer; formatting and linting are `ruff format` / `ruff check`; type checking is `ty`.
-- PydanticAI is the LLM substrate candidate (ADR-003); the narrowed capability spike in `docs/SPIKE.md` is the entry gate for implementation. Pipyer owns artifact and evidence semantics only; PydanticAI owns model-call mechanics. Pipyer MUST NOT become a PydanticAI agent-spec wrapper.
+- PydanticAI is the LLM substrate candidate (ADR-003); the narrowed capability spike in `docs/sprint-01/SPIKE.md` is the entry gate for implementation. Pipyer owns artifact and evidence semantics only; PydanticAI owns model-call mechanics. Pipyer MUST NOT become a PydanticAI agent-spec wrapper.
 - Secrets (provider API keys) are resolved at call time via the household 1Password pattern - `op read` with environment-variable fallback (provider chain `auto`/`1password`/`env`). Workflow files and run records MUST NOT contain credentials; run records MAY record which provider supplied a credential, never its value.
 - Local-first: no hosted services are required to run.
 - Out of scope (absent amendment): campaign state machines, review queues, status workflows, template or expression languages, autonomous control flow, UI/dashboard, scheduler, hosted anything. HTTP and human-checkpoint components are deferred. Pipyer MAY integrate with tools in these categories; it does not become them.
 
 ## Development Workflow & Quality Gates
 
-- Feature order is binding per `docs/BACKLOG.md`; each feature gates the next (001 spike and contracts → 002 GradeBot slice → 003 DEMA runner → 004 twc-bridge pass).
+- Feature order is binding per `docs/sprint-01/BACKLOG.md`; each feature gates the next (001 spike and contracts → 002 GradeBot slice → 003 DEMA runner → 004 twc-bridge pass).
 - Every feature plan MUST pass the Constitution Check gates in the plan template before Phase 0 research and again after Phase 1 design. Violations require a Complexity Tracking entry justifying why no simpler alternative suffices.
 - Nothing executes unvalidated: workflows MUST validate fully before execution, in every feature, forever.
 

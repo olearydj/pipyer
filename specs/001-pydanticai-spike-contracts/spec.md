@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "based on the materials in @docs/" - Feature 001 from `docs/BACKLOG.md`, fed by `docs/SPEC.md` (sections 5, 6, 7, 9, 12) and `docs/SPIKE.md`.
+**Input**: User description: "based on the materials in @docs/" - Feature 001 from `docs/sprint-01/BACKLOG.md`, fed by `docs/sprint-01/SPEC.md` (sections 5, 6, 7, 9, 12) and `docs/sprint-01/SPIKE.md`.
 
 This feature is the entry gate for everything else. It has two deliverables, in order: a capability spike producing evidence for the LLM substrate decision (001a), and the two durable contracts as code with their conformance tests and first fixture (001b). No runner is built in this feature; the runner arrives in Feature 002 and is deliberately rebuildable from the contracts produced here.
 

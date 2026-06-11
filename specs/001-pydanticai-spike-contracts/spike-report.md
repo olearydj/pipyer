@@ -118,4 +118,4 @@ GO/HALT: **GO** - recorded 2026-06-11.
 
 Boundary outcome: standalone runner, hypothesis confirmed. Review trail: independent context-free reviewer (initial dissent on FR-001 stub-only evidence, resolved by live retry-aggregation probe), standing cross-session reviewer (CONCUR), user arbitration (GO). All spike legs closed with executed evidence; no pending confirmations. ADR-003's entry-gate qualification is satisfied; Phases 4-7 (001b contracts, run records, GradeBot fixture, falsification census) are cleared.
 
-Reviewer inputs: this report, `spike/results/*.json`, `docs/SPIKE.md` decision criteria, the addendum above.
+Reviewer inputs: this report, `spike/results/*.json`, `docs/sprint-01/SPIKE.md` decision criteria, the addendum above.

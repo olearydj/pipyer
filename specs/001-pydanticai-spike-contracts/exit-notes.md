@@ -44,7 +44,7 @@ None required (spike-report.md Q3): the R8 ten-category enum stands. Two documen
 
 ## Backlog exit criteria (finalized 2026-06-11)
 
-Per docs/BACKLOG.md Feature 001:
+Per docs/sprint-01/BACKLOG.md Feature 001:
 
 - [x] Spike report written: `spike-report.md`, all four areas evidenced (stub + live legs closed in the review addendum), boundary outcome standalone-runner, T013 gate GO with cross-session review trail.
 - [x] Both schemas exist with passing conformance tests: workflow schema (`src/pipyer/schema/`) and run-record schema (`src/pipyer/records/`); 106 conformance tests pass, 8 execution-behavior fixtures authored and skip-marked for Feature 002. Toolchain gates clean (`ruff format --check`, `ruff check`, `ty check`).

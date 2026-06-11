@@ -31,4 +31,4 @@
 
 - All items pass; the spec is ready for `/speckit-clarify` or `/speckit-plan`.
 - On implementation details: the feature's subject is itself a technology evaluation (the PydanticAI capability spike mandated by ADR-003), so the substrate name appears in the title and the spike requirements describe what must be evidenced about it. The body otherwise speaks of "the substrate", "data-file surface", and "machine-readable lines" rather than library, format, or language names. This is subject matter, not leakage.
-- Zero [NEEDS CLARIFICATION] markers were needed: the source documents (`docs/SPEC.md`, `docs/BACKLOG.md`, `docs/SPIKE.md`) are decided material, and the six genuinely open design questions are explicitly assigned to the planning phase by the backlog (FR-020), not left ambiguous in the spec.
+- Zero [NEEDS CLARIFICATION] markers were needed: the source documents (`docs/sprint-01/SPEC.md`, `docs/sprint-01/BACKLOG.md`, `docs/sprint-01/SPIKE.md`) are decided material, and the six genuinely open design questions are explicitly assigned to the planning phase by the backlog (FR-020), not left ambiguous in the spec.
