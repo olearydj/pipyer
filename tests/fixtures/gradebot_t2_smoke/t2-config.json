@@ -1,0 +1,43 @@
+{
+  "assignment_name": "Smoke Test 2",
+  "metadata_problem_id_map": {
+    "test2.1-double_it": "double_it",
+    "test2.2-shout": "shout"
+  },
+  "problems": {
+    "double_it": {
+      "name": "Double It",
+      "description": "Return twice the input.",
+      "evaluation_type": "function",
+      "code_runner": {
+        "function_name": "double_it",
+        "test_cases": [
+          {"description": "example", "inputs": [2], "expected_return": 4},
+          {"description": "generalization", "inputs": [-3], "expected_return": -6}
+        ]
+      },
+      "llm_rubric": [
+        {"key": "returns_value", "statement": "The function returns a value. (True/False)"},
+        {"key": "uses_multiplication", "statement": "The code multiplies by 2. (True/False)"}
+      ],
+      "llm_problem_context": "Write double_it(x) returning 2*x."
+    },
+    "shout": {
+      "name": "Shout",
+      "description": "Uppercase with exclamation.",
+      "evaluation_type": "function",
+      "code_runner": {
+        "function_name": "shout",
+        "test_cases": [
+          {"description": "example", "inputs": ["hi"], "expected_return": "HI!"},
+          {"description": "generalization", "inputs": [""], "expected_return": "!"}
+        ]
+      },
+      "llm_rubric": [
+        {"key": "uses_upper", "statement": "The code calls .upper(). (True/False)"},
+        {"key": "appends_bang", "statement": "The code appends an exclamation mark. (True/False)"}
+      ],
+      "llm_problem_context": "Write shout(s) returning s.upper() + '!'."
+    }
+  }
+}

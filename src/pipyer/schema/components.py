@@ -43,6 +43,7 @@ class LlmConfig(_Config):
     prompt: str
     output_schema: str | dict[str, Any]
     max_validation_retries: int = Field(default=2, ge=0)
+    timeout_s: int | None = Field(default=None, ge=1)
 
 
 DEFAULT_VERDICT_SCHEMA: dict[str, Any] = {
@@ -63,6 +64,7 @@ class LlmJudgeConfig(_Config):
         default_factory=lambda: dict(DEFAULT_VERDICT_SCHEMA)
     )
     max_validation_retries: int = Field(default=2, ge=0)
+    timeout_s: int | None = Field(default=None, ge=1)
 
 
 CheckOp = Literal[

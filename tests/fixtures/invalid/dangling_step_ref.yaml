@@ -1,4 +1,4 @@
-schema_version: "1"
+schema_version: "2"
 name: dangling
 steps:
   - name: run_tests

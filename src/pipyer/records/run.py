@@ -76,6 +76,37 @@ class StepResultEvent(StepResult):
     event: Literal["step_result"] = "step_result"
 
 
+class EachExpandedEvent(_Model):
+    """An `each` collection's expansion is itself recorded - including zero items
+    (R12: an empty collection is legitimate runtime data, never a silent no-op)."""
+
+    event: Literal["each_expanded"] = "each_expanded"
+    schema_version: str
+    run_id: str
+    step: str
+    item_count: int = Field(ge=0)
+    at: datetime
+
+
+class RunResumedEvent(_Model):
+    """The resume boundary: one event whose payload is the resume diff (R20).
+
+    Keys in the lists follow the execution-unit convention: "<step>" for scalar
+    steps, "<step>[<index>]" for `each` items.
+    """
+
+    event: Literal["run_resumed"] = "run_resumed"
+    schema_version: str
+    run_id: str
+    resumed_from_status: str
+    skipped: list[str] = Field(default_factory=list)
+    recompute: list[dict[str, str]] = Field(default_factory=list)  # {key, reason}
+    failed_not_retried: list[str] = Field(default_factory=list)
+    failed_retried: list[str] = Field(default_factory=list)
+    lock_reclaimed: bool = False
+    at: datetime
+
+
 class RunHaltedEvent(_Model):
     event: Literal["run_halted"] = "run_halted"
     schema_version: str
@@ -93,7 +124,14 @@ class RunFinishedEvent(_Model):
     totals: dict[str, Any]
 
 
-Event = RunStartedEvent | StepResultEvent | RunHaltedEvent | RunFinishedEvent
+Event = (
+    RunStartedEvent
+    | StepResultEvent
+    | EachExpandedEvent
+    | RunResumedEvent
+    | RunHaltedEvent
+    | RunFinishedEvent
+)
 
 
 def event_line(event: Event | StepResult) -> str:

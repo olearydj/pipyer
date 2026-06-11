@@ -201,6 +201,23 @@ def validate_workflow(workflow: Workflow, base_dir: Path | None = None) -> list[
                     in_each=False,
                 )
 
+    # Rule 11 (R16): local aliases never auto-pick a structured-output mode. An
+    # alias is local when its settings carry a base_url (the Ollama pattern);
+    # such aliases must declare output_mode explicitly.
+    for alias_name, alias in workflow.models.items():
+        if alias.settings.get("base_url") and alias.output_mode is None:
+            add(
+                Issue(
+                    loc=f"models.{alias_name}.output_mode",
+                    code="local_alias_output_mode_required",
+                    message=(
+                        f"alias {alias_name!r} targets a local endpoint (settings.base_url); "
+                        "structured-output mode must be set explicitly "
+                        "(tool / native / prompted) - local aliases are never auto-picked"
+                    ),
+                )
+            )
+
     # Per-step checks, document order.
     for i, step in enumerate(workflow.steps):
         in_each = step.each is not None

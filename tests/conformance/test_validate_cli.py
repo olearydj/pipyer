@@ -20,7 +20,7 @@ def test_valid_workflow_exits_zero_with_name_version_hash():
     result = runner.invoke(app, ["validate", str(VALID)])
     assert result.exit_code == 0, result.output
     assert "OK minimal" in result.output
-    assert "schema v1" in result.output
+    assert "schema v2" in result.output
     assert "sha256:" in result.output
 
 
@@ -45,7 +45,7 @@ def test_json_output_is_machine_readable():
 def test_errors_are_deterministic_and_document_ordered(tmp_path: Path):
     two_errors = tmp_path / "two_errors.yaml"
     two_errors.write_text(
-        "schema_version: '1'\n"
+        "schema_version: '2'\n"
         "name: two_errors\n"
         "steps:\n"
         "  - name: first\n"

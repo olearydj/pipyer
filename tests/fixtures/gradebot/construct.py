@@ -38,20 +38,29 @@ GRADE_SCHEMA = {
 
 def build() -> Workflow:
     return Workflow(
-        schema_version="1",
+        schema_version="2",
         name="gradebot_hw",
         description=(
             "Grade one assignment's submissions against a rubric, with per-student evidence."
         ),
         inputs={
             "submissions_dir": InputDecl(
-                type="path", description="Directory of student .py submissions"
+                type="path",
+                required=False,
+                default="submissions",
+                description="Directory of student .py submissions",
             ),
             "rubric_file": InputDecl(
-                type="path", description="The rubric the grader applies verbatim"
+                type="path",
+                required=False,
+                default="rubric.md",
+                description="The rubric the grader applies verbatim",
             ),
             "output_dir": InputDecl(
-                type="path", description="Where per-student feedback files land"
+                type="path",
+                required=False,
+                default="feedback",
+                description="Where per-student feedback files land",
             ),
             "summary_file": InputDecl(
                 type="path",
@@ -60,9 +69,7 @@ def build() -> Workflow:
                 description="Where the batch summary report lands",
             ),
         },
-        models={
-            "grader": ModelAlias(model="anthropic:claude-haiku-4-5", settings={"temperature": 0.2})
-        },
+        models={"grader": ModelAlias(model="test", settings={})},
         steps=[
             PythonStep(
                 name="collect_submissions",

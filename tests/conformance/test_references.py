@@ -75,7 +75,7 @@ def test_item_scope_enforced_by_validation():
     from pipyer.validation import validate_data
 
     data = {
-        "schema_version": "1",
+        "schema_version": "2",
         "name": "scope",
         "steps": [
             {"name": "src", "component": "python", "config": {"script": "s.py"}},

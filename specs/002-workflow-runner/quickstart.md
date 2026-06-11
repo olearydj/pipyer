@@ -17,7 +17,7 @@ Conformance scenarios need no network and no secrets (deterministic stub). Only 
 uv run pytest tests/conformance/execution/ -v
 ```
 
-Expected: 8 passed, 0 skipped, with the fixture bodies byte-identical to their Feature 001 form (verify: `git diff 9cd82a7 -- tests/conformance/execution/test_execution_fixtures.py` shows only removed `@pytest.mark.skip` lines).
+Expected: 8 passed, 0 skipped, with the fixture bodies byte-identical to their Feature 001 form (verify: `git diff 9cd82a7 -- tests/conformance/execution/test_execution_fixtures.py` shows only the removed skip markers - the `@F002` lines plus the now-unused marker definition and `pytest` import - and the removal of obsolete `# ty: ignore[unresolved-import]` comments that became dead once `pipyer.runner` exists; zero assertion changes).
 
 ## 2. Full suite and quality gates (SC-006)
 
@@ -33,22 +33,22 @@ Expected: suite green including `test_import_boundary.py` unmodified; all checks
 ## 3. CLI: run, dry-run parity, run directory
 
 ```bash
-uv run pipyer run tests/fixtures/gradebot.yaml --results-dir /tmp/pipyer-quickstart
-uv run pipyer run tests/fixtures/gradebot.yaml --dry-run   # identical to: pipyer validate
+uv run pipyer run tests/fixtures/gradebot/workflow.yaml --results-dir /tmp/pipyer-quickstart
+uv run pipyer run tests/fixtures/gradebot/workflow.yaml --dry-run   # identical to: pipyer validate
 ls /tmp/pipyer-quickstart/*/
 ```
 
-Expected: exit 0; directory matches the run-directory contract (`events.jsonl`, `checkpoint.json`, `run.json`, `summary.md`, `outputs/`); `--dry-run` produces validation output only and creates nothing.
+Expected: exit 1 - the fixture deliberately contains one failing submission (bob), and completed-with-failures exits 1 per the run-cli contract; the human output reports 25 succeeded, 1 failed, 3 skipped. The run directory matches the run-directory contract (`events.jsonl`, `checkpoint.json`, `run.json`, `summary.md`, `outputs/`); `--dry-run` produces validation output only, exits 0, and creates nothing.
 
 ## 4. Interrupt and resume (US2)
 
 Start a stub batch, interrupt with Ctrl-C mid-`each` (or use the recorded test hook via the API), then:
 
 ```bash
-uv run pipyer run tests/fixtures/gradebot.yaml --resume last --results-dir /tmp/pipyer-quickstart
+uv run pipyer run tests/fixtures/gradebot/workflow.yaml --resume last --results-dir /tmp/pipyer-quickstart
 ```
 
-Expected: exit 0; the summary's resume section reports skipped (hash-match) units and `recomputed: 0`; `events.jsonl` shows one `run_resumed` boundary. With a deliberately edited input: only affected units recompute, and the diff names the reason.
+Expected: exit 1 (the prior failure carries over, un-retried, into the resumed run's accounting); the summary's resume section reports skipped (hash-match) units and `Units recomputed: 0`; `events.jsonl` shows one `run_resumed` boundary naming `run_tests[1]` as failed-not-retried. With a deliberately edited input: only affected units recompute, and the totals name them.
 
 ## 5. Summary regeneration (SC-005)
 

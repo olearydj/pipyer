@@ -27,7 +27,7 @@ def test_defaults_materialize_identically_from_both_surfaces():
     # defaults explicitly. R7: identical canonical bytes either way.
     from_yaml = _load_workflow(FIXTURES / "valid" / "minimal.yaml")
     constructed = Workflow(
-        schema_version="1",
+        schema_version="2",
         name="minimal",
         steps=[
             PythonStep(
@@ -53,7 +53,7 @@ def test_defaults_are_materialized_in_canonical_bytes():
 
 def test_schema_version_participates_in_canonical_bytes():
     workflow = _load_workflow(FIXTURES / "valid" / "minimal.yaml")
-    assert '"schema_version":"1"' in canonical_bytes(workflow).decode("utf-8")
+    assert '"schema_version":"2"' in canonical_bytes(workflow).decode("utf-8")
 
 
 def test_canonical_form_is_sorted_compact_json():

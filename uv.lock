@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-06-08T00:34:05.791201Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P3D"
 
 [[package]]
@@ -1719,6 +1719,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "pydantic-ai" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
@@ -1731,12 +1732,12 @@ dev = [
 ]
 spike = [
     { name = "anthropic" },
-    { name = "pydantic-ai" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-ai", specifier = ">=1.106.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "typer", specifier = ">=0.12" },
 ]
@@ -1747,10 +1748,7 @@ dev = [
     { name = "ruff", specifier = ">=0.8" },
     { name = "ty" },
 ]
-spike = [
-    { name = "anthropic", specifier = ">=0.107.1" },
-    { name = "pydantic-ai" },
-]
+spike = [{ name = "anthropic", specifier = ">=0.107.1" }]
 
 [[package]]
 name = "platformdirs"

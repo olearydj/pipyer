@@ -1,16 +1,22 @@
-schema_version: "1"
+schema_version: "2"
 name: gradebot_hw
 description: Grade one assignment's submissions against a rubric, with per-student evidence.
 
 inputs:
   submissions_dir:
     type: path
+    required: false
+    default: submissions
     description: Directory of student .py submissions
   rubric_file:
     type: path
+    required: false
+    default: rubric.md
     description: The rubric the grader applies verbatim
   output_dir:
     type: path
+    required: false
+    default: feedback
     description: Where per-student feedback files land
   summary_file:
     type: path
@@ -20,9 +26,8 @@ inputs:
 
 models:
   grader:
-    model: anthropic:claude-haiku-4-5
-    settings:
-      temperature: 0.2
+    model: test
+    settings: {}
 
 steps:
   - name: collect_submissions

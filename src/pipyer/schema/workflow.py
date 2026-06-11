@@ -22,7 +22,7 @@ from pipyer.schema.components import (
 )
 
 NAME_PATTERN = r"^[a-z][a-z0-9_]*$"
-SUPPORTED_SCHEMA_VERSIONS = ("1",)
+SUPPORTED_SCHEMA_VERSIONS = ("2",)
 
 Name = Annotated[str, Field(pattern=NAME_PATTERN)]
 
@@ -47,6 +47,10 @@ class InputDecl(_Model):
 class ModelAlias(_Model):
     model: str
     settings: dict[str, Any] = Field(default_factory=dict)
+    # Structured-output mode (R16): None = provider default for hosted aliases.
+    # Local aliases (settings.base_url) must set it explicitly - never auto-picked;
+    # enforced by validation, not here.
+    output_mode: Literal["tool", "native", "prompted"] | None = None
 
 
 class Settings(_Model):

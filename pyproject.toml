@@ -5,6 +5,7 @@ description = "Deterministic orchestration: the workflow controls what happens; 
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7",
+    "pydantic-ai>=1.106.0",
     "pyyaml>=6.0",
     "typer>=0.12",
 ]
@@ -20,7 +21,6 @@ dev = [
 ]
 spike = [
     "anthropic>=0.107.1",
-    "pydantic-ai",
 ]
 
 [build-system]
@@ -47,3 +47,6 @@ include = ["tests/**"]
 
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
+
+[tool.ty.src]
+exclude = ["spike/**"]

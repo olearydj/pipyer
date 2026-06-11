@@ -73,8 +73,8 @@ CONFIG_SURFACES = {
     "FileWriteConfig": {"path", "format"},
     "ShellConfig": {"command", "parse_stdout", "timeout_s"},
     "PythonConfig": {"script", "timeout_s"},
-    "LlmConfig": {"model", "prompt", "output_schema", "max_validation_retries"},
-    "LlmJudgeConfig": {"model", "prompt", "output_schema", "max_validation_retries"},
+    "LlmConfig": {"model", "prompt", "output_schema", "max_validation_retries", "timeout_s"},
+    "LlmJudgeConfig": {"model", "prompt", "output_schema", "max_validation_retries", "timeout_s"},
     "AssertionsConfig": {"checks"},
 }
 
@@ -90,3 +90,10 @@ def test_fr013_tripwire_component_config_surfaces():
     for name, fields in CONFIG_SURFACES.items():
         cls = getattr(components, name)
         assert set(cls.model_fields) == fields, name
+
+
+ALIAS_SURFACE = {"model", "settings", "output_mode"}
+
+
+def test_fr013_tripwire_model_alias_surface():
+    assert set(wf_mod.ModelAlias.model_fields) == ALIAS_SURFACE
