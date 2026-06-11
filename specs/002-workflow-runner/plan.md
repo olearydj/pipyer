@@ -71,7 +71,8 @@ specs/002-workflow-runner/
 
 ```text
 src/pipyer/
-├── schema/              # FROZEN contracts (additive changes only, with conformance tests)
+├── schema/              # FROZEN contracts (additive-for-validation changes only, with
+│                        #   conformance tests; hash-breaking per R7 → schema_version "2", R16)
 │   ├── workflow.py      # + ModelAlias.output_mode (R16)
 │   ├── components.py    # + LlmConfig.timeout_s, LlmJudgeConfig.timeout_s (R16)
 │   └── refs.py          # unchanged
@@ -116,7 +117,7 @@ workflows/gradebot-t2/   # NEW - acceptance workflow (no PII: corpus by absolute
 └── compare.py           # python-step script: layered comparison record (FR-021/FR-022)
 ```
 
-**Structure Decision**: single package; the runner is a subpackage to keep `engine.py` from becoming a monolith, with components isolated so the import boundary stays auditable (exactly one module imports `pydantic_ai`). Contract modules receive only the two additive fields, each shipped with conformance tests in the same change set.
+**Structure Decision**: single package; the runner is a subpackage to keep `engine.py` from becoming a monolith, with components isolated so the import boundary stays auditable (exactly one module imports `pydantic_ai`). Contract modules receive only the two new fields - additive for validation, hash-breaking per R7, carried by the `schema_version` bump to `"2"` (R16) - each shipped with conformance tests in the same change set.
 
 ## Complexity Tracking
 

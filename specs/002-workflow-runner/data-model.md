@@ -2,7 +2,9 @@
 
 Feature 001 contracts (`Workflow`, `Settings`, `Step`, `StepResult`, `ErrorCategory`, `RunRecord`, `CheckpointSnapshot`, events, `parse_event_log`) are frozen and not restated; this file covers what Feature 002 adds or pins down. Schema additions are the two fields in research R16, conformance-tested in the same change set.
 
-## Schema additions (frozen modules, additive)
+## Schema additions (frozen modules, additive for validation - hash-breaking per R7)
+
+Both additions materialize as `null` in canonical bytes (R7: defaults materialized), changing every existing workflow hash; per R16 as corrected at plan review, the workflow `schema_version` bumps to `"2"`, all in-repo workflow files and fixtures update, the supported-version set becomes `{"2"}`, and a conformance test asserts version-`"1"` files are rejected with the legible unsupported-version error. Cross-version resume ends at the boundary by design.
 
 ### ModelAlias.output_mode
 
