@@ -1,9 +1,6 @@
 # Data Model: PydanticAI Spike and Contracts
 
-Two contract families: the workflow schema (authoring side) and the run-record schema
-(evidence side). Both carry explicit schema-version fields (clarification 2026-06-10). All
-models are Pydantic v2 with `extra="forbid"` - unknown fields are validation errors, never
-silently ignored (a stale workflow must fail loudly).
+Two contract families: the workflow schema (authoring side) and the run-record schema (evidence side). Both carry explicit schema-version fields (clarification 2026-06-10). All models are Pydantic v2 with `extra="forbid"` - unknown fields are validation errors, never silently ignored (a stale workflow must fail loudly).
 
 ## Workflow schema entities
 
@@ -59,16 +56,10 @@ segment    = identifier | integer
 
 Rules:
 
-- References appear in mapping positions only (input maps, `each`, `outputs`, alias targets).
-  Nothing is ever interpolated into strings - there is no template syntax to put one in.
-- `steps.<name>.<field...>` may reference earlier steps only (sequential order; no forward or
-  self references).
+- References appear in mapping positions only (input maps, `each`, `outputs`, alias targets). Nothing is ever interpolated into strings - there is no template syntax to put one in.
+- `steps.<name>.<field...>` may reference earlier steps only (sequential order; no forward or self references).
 - `item` / `index` are valid only inside a step with `each`.
-- Ref versus literal is decided by full match, never prefix match: a string is a Ref iff it
-  fully matches the grammar. A string matching `^(inputs|steps|matrix|models|item|index)(\.|$)`
-  that does not fully match the grammar is a validation error - never a silent literal - and
-  the error names the escape hatch: declare the value as a workflow input with a default.
-  Strings without a reserved-root prefix are literals.
+- Ref versus literal is decided by full match, never prefix match: a string is a Ref iff it fully matches the grammar. A string matching `^(inputs|steps|matrix|models|item|index)(\.|$)` that does not fully match the grammar is a validation error - never a silent literal - and the error names the escape hatch: declare the value as a workflow input with a default. Strings without a reserved-root prefix are literals.
 
 ### Component configs
 
@@ -101,36 +92,24 @@ Rules:
 
 ## Dry-run validation rules (FR-010, FR-021)
 
-Structural validation (`model_validate`) plus these cross-checks, every failure naming the
-offending element by location (e.g. `steps[2].inputs.test_output`):
+Structural validation (`model_validate`) plus these cross-checks, every failure naming the offending element by location (e.g. `steps[2].inputs.test_output`):
 
 1. Step names unique; all identifiers match the pattern.
-2. Every Ref resolves: to a declared input, an earlier step, a matrix dimension, a model
-   alias, or `item`/`index` within an `each` step.
-3. Root-prefixed strings that fail the full-grammar match are errors naming the
-   declare-an-input escape hatch (never silently treated as literals).
+2. Every Ref resolves: to a declared input, an earlier step, a matrix dimension, a model alias, or `item`/`index` within an `each` step.
+3. Root-prefixed strings that fail the full-grammar match are errors naming the declare-an-input escape hatch (never silently treated as literals).
 4. `each` targets a Ref (which must, structurally, be able to yield a collection).
 5. Every `llm`/`llm_judge` `model` names an existing alias; alias Ref targets resolve.
-6. Prompt files exist; every named placeholder in the prompt is bound by the input map;
-   every input-map binding for a prompt corresponds to a placeholder (unbound and unused are
-   both errors - legible strictness). Prompt paths resolve relative to the workflow file's
-   location, identically in the library API and the CLI (library parity, SC-004);
-   direct-construction workflows supply the base directory as an explicit validation
-   argument.
-7. Matrix dimensions are non-empty lists: an empty dimension means zero executable cells and
-   is rejected as an authoring error (R12). Empty `each` collections are runtime data and
-   not a dry-run concern.
+6. Prompt files exist; every named placeholder in the prompt is bound by the input map; every input-map binding for a prompt corresponds to a placeholder (unbound and unused are both errors - legible strictness). Prompt paths resolve relative to the workflow file's location, identically in the library API and the CLI (library parity, SC-004); direct-construction workflows supply the base directory as an explicit validation argument.
+7. Matrix dimensions are non-empty lists: an empty dimension means zero executable cells and is rejected as an authoring error (R12). Empty `each` collections are runtime data and not a dry-run concern.
 8. `outputs` refs resolve.
 9. `schema_version` is supported.
 10. `extra="forbid"` everywhere: unknown keys are named in errors.
 
 ## Canonical serialization (R7)
 
-- Deterministic JSON over the validated model: UTF-8, sorted keys, compact separators,
-  defaults materialized, `schema_version` included.
+- Deterministic JSON over the validated model: UTF-8, sorted keys, compact separators, defaults materialized, `schema_version` included.
 - `workflow_hash` = SHA-256 of exactly those bytes.
-- One definition, three jobs: dual-surface equality (SC-003), workflow hashing (FR-016),
-  resume matching (Feature 002).
+- One definition, three jobs: dual-surface equality (SC-003), workflow hashing (FR-016), resume matching (Feature 002).
 
 ## Run-record schema entities
 
@@ -193,12 +172,7 @@ offending element by location (e.g. `steps[2].inputs.test_output`):
 
 ### JSONL event framing
 
-Each line of the machine log is one self-contained event:
-`run_started`, `step_result`, `run_halted`, `run_finished` - each carrying `schema_version`
-and `run_id`. Append-only, single-writer. A corrupt trailing line (interrupted write) is
-detectable by JSON parse failure on the final line only; the contract requires detection to
-be representable (recovery behavior is Feature 002, fixture authored now). The markdown run
-summary is derivable from the log alone.
+Each line of the machine log is one self-contained event: `run_started`, `step_result`, `run_halted`, `run_finished` - each carrying `schema_version` and `run_id`. Append-only, single-writer. A corrupt trailing line (interrupted write) is detectable by JSON parse failure on the final line only; the contract requires detection to be representable (recovery behavior is Feature 002, fixture authored now). The markdown run summary is derivable from the log alone.
 
 ### CheckpointSnapshot (R6)
 
@@ -211,8 +185,7 @@ summary is derivable from the log alone.
 | `completed` | dict: step key (`step`, `item_index`, matrix cell) → `{input_hash, event_ref}` |
 | `written_at` | ISO-8601 UTC |
 
-Derived from the event log, atomically written, never authoritative: missing or corrupt
-snapshots reconstruct from the log (conformance area).
+Derived from the event log, atomically written, never authoritative: missing or corrupt snapshots reconstruct from the log (conformance area).
 
 ## Relationships
 
@@ -227,6 +200,4 @@ StepResult *──1 ErrorTaxonomy category (closed enum)
 
 ## State transitions
 
-Records are immutable events - a `StepResult` is written once with its final status; nothing
-mutates. Run status is the only lifecycle: `running → completed | halted | interrupted`
-(halted = failure budget breached, itself a recorded event).
+Records are immutable events - a `StepResult` is written once with its final status; nothing mutates. Run status is the only lifecycle: `running → completed | halted | interrupted` (halted = failure budget breached, itself a recorded event).

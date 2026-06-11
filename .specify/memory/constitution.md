@@ -1,35 +1,18 @@
-<!--
-Sync Impact Report
+<!-- Sync Impact Report
 - Version change: 2.0.0 → 2.1.0
 - Amendment (2026-06-11, owner toolchain and secrets directives):
-  - Operational Constraints, stack: added uv_build backend, typer for CLIs, ruff for
-    format/lint, ty for type checking (owner standards; rationale and reference
-    implementations recorded in feature-001 research R13).
-  - Operational Constraints, secrets: environment-only replaced by the household 1Password
-    pattern (op read with env fallback, provider chain auto/1password/env), shipped twice in
-    twc-bridge and danvas (research R14). Load-bearing rule unchanged: never in workflow
-    files or run records; provenance (which provider) recordable, value never.
-  MINOR bump: materially expanded guidance, no principle changed.
+  - Operational Constraints, stack: added uv_build backend, typer for CLIs, ruff for format/lint, ty for type checking (owner standards; rationale and reference implementations recorded in feature-001 research R13).
+  - Operational Constraints, secrets: environment-only replaced by the household 1Password pattern (op read with env fallback, provider chain auto/1password/env), shipped twice in twc-bridge and danvas (research R14). Load-bearing rule unchanged: never in workflow files or run records; provenance (which provider) recordable, value never. MINOR bump: materially expanded guidance, no principle changed.
 - Prior entry: 1.1.0 → 2.0.0
-- Amendment (2026-06-10, post-feature-001-spec review): removed specification-level detail
-  now owned by docs/SPEC.md sections 5-7 and specs/001-pydanticai-spike-contracts/spec.md:
+- Amendment (2026-06-10, post-feature-001-spec review): removed specification-level detail now owned by docs/SPEC.md sections 5-7 and specs/001-pydanticai-spike-contracts/spec.md:
   - Principle II: per-item mechanism enumeration (FR-013 guarantees uniformity by construction)
   - Principle III: record formats and cost-field list (FR-015, FR-016)
   - Principle V: restated execution-semantics list (SPEC section 6 bound by reference; FR-017)
   - Principle VII: append-friendliness and entity-ID clauses (FR-016, US3)
-  - Development Workflow: falsification clause (FR-019), item-failure and resume rules
-    (US3, SC-006, SPEC section 6), stale-workflow elaboration (US2, FR-010)
-  MAJOR bump: backward-incompatible removal of normative text. Rationale: the constitution
-  holds only what survives a runner rebuild; mechanism lives in the contracts and feature
-  specs. Triplicated normative text is the documented drift failure mode.
+  - Development Workflow: falsification clause (FR-019), item-failure and resume rules (US3, SC-006, SPEC section 6), stale-workflow elaboration (US2, FR-010) MAJOR bump: backward-incompatible removal of normative text. Rationale: the constitution holds only what survives a runner rebuild; mechanism lives in the contracts and feature specs. Triplicated normative text is the documented drift failure mode.
 - Prior entry: 1.0.0 → 1.1.0 (Principle II determinism fix; uniformity guarantee added)
 - Amendment (2026-06-10, post-ratification review):
-  - Principle II: replaced the determinism clause, which as written forbade `each` fan-out
-    (item count is necessarily a function of input data, e.g. how many students submitted).
-    New wording separates the three guarantees: step graph from workflow alone; fan-out from
-    workflow plus input data; nothing from model output. Also added the uniformity-across-items
-    guarantee (consistency is a first-class driver per SPEC section 2; the HW1 fan-out episode
-    is the motivating evidence). MINOR bump: materially expanded guidance.
+  - Principle II: replaced the determinism clause, which as written forbade `each` fan-out (item count is necessarily a function of input data, e.g. how many students submitted). New wording separates the three guarantees: step graph from workflow alone; fan-out from workflow plus input data; nothing from model output. Also added the uniformity-across-items guarantee (consistency is a first-class driver per SPEC section 2; the HW1 fan-out episode is the motivating evidence). MINOR bump: materially expanded guidance.
 - Prior entry: (template) → 1.0.0 (initial ratification)
 - Modified principles: all template placeholders replaced (initial adoption)
   - I. Directing, Not Delegating
@@ -47,14 +30,11 @@ Sync Impact Report
   - ✅ .specify/templates/spec-template.md (no changes required; already aligned)
   - ✅ CLAUDE.md (pointer to constitution added)
   - N/A .specify/templates/commands/ (directory not present)
-- Deferred TODOs: none
--->
+- Deferred TODOs: none -->
 
 # Pipyer Constitution
 
-Pipyer is a deterministic orchestration tool: the workflow controls what happens; the model works
-inside the steps. This constitution binds all features, plans, and implementations. Source
-material: `docs/SPEC.md` (consolidated 2026-06-10), `docs/BACKLOG.md`, `docs/SPIKE.md`.
+Pipyer is a deterministic orchestration tool: the workflow controls what happens; the model works inside the steps. This constitution binds all features, plans, and implementations. Source material: `docs/SPEC.md` (consolidated 2026-06-10), `docs/BACKLOG.md`, `docs/SPIKE.md`.
 
 ## Core Principles
 
@@ -88,8 +68,7 @@ Every run MUST leave machine-readable and human-readable evidence, with usage an
 Workflows are schema-validated data, never a language (ADR-004). The canonical form is a Pydantic-defined schema with two equal authoring surfaces: YAML (`safe_load` then `model_validate`, nothing more) and direct Python construction. Non-negotiable rules:
 
 - No templating, expressions, conditionals, or loops in workflow files.
-- References are dotted paths in mapping positions only
-  (`inputs: {test_output: steps.run_tests.stdout}`).
+- References are dotted paths in mapping positions only (`inputs: {test_output: steps.run_tests.stdout}`).
 - Prompts live in prompt files with named placeholders bound by explicit input maps.
 - Transformations are Python steps.
 
