@@ -1,6 +1,6 @@
-# Feature 002 Exit Notes (implementation state: engine complete, acceptance run pending)
+# Feature 002 Exit Notes (complete)
 
-Status as of 2026-06-11: T001-T035 and T038-T040 complete. The two gated tasks remain open: T036 (the live acceptance run - real spend against the archived corpus) and T037 (cross-session review of the comparison record, user-arbitrated per SC-008). This file records the implementation findings now so the acceptance session inherits them; the acceptance evidence itself lands in `acceptance-evidence.md` when T036 runs.
+Status as of 2026-06-12: all 40 tasks complete. T036 (live acceptance run) and T037 (SC-008 cross-session review) closed with the user's GO; the full acceptance record - run identity, agreement statistics, the independent reviewer's dissent and its forensic resolution, the three runner defects the live run surfaced, and carried items - is in `acceptance-evidence.md`.
 
 ## Conformance state
 
