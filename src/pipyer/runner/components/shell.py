@@ -9,11 +9,11 @@ TimeoutExpired maps to the timeout category.
 from __future__ import annotations
 
 import json
-import subprocess
 from typing import Any
 
 from pipyer.records.step_result import ErrorCategory
 from pipyer.runner.components import StepFailure
+from pipyer.runner.components._subproc import CaptureTimeout, run_captured
 
 
 def _env_overlay(resolved_inputs: dict[str, Any]) -> dict[str, str]:
@@ -30,19 +30,17 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]
 
     env = {**os.environ, **_env_overlay(resolved_inputs)}
     try:
-        proc = subprocess.run(
+        proc = run_captured(
             step.config.command,
-            input=json.dumps(resolved_inputs),
-            capture_output=True,
-            text=True,
+            input_text=json.dumps(resolved_inputs),
             cwd=ctx.workflow_dir,
             env=env,
-            timeout=step.config.timeout_s,
+            timeout_s=step.config.timeout_s,
         )
-    except subprocess.TimeoutExpired as error:
+    except CaptureTimeout as error:
         raise StepFailure(
             ErrorCategory.TIMEOUT,
-            f"command exceeded timeout_s={step.config.timeout_s}",
+            f"command exceeded timeout_s={step.config.timeout_s} (process group killed)",
             detail={"command": step.config.command},
         ) from error
     stdout: Any = proc.stdout
@@ -51,14 +49,22 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]
             stdout = json.loads(proc.stdout) if proc.stdout.strip() else None
         except json.JSONDecodeError:
             stdout = proc.stdout  # keep raw text; a nonzero exit will say why
-    if proc.returncode != 0:
+    if proc.exit_code != 0:
         raise StepFailure(
             ErrorCategory.NONZERO_EXIT,
-            f"command exited {proc.returncode}",
+            f"command exited {proc.exit_code}",
             detail={
-                "exit_code": proc.returncode,
+                "exit_code": proc.exit_code,
                 "stdout": stdout,
                 "stderr": proc.stderr[-2000:],
+                "stdout_truncated": proc.stdout_truncated,
+                "stderr_truncated": proc.stderr_truncated,
             },
         )
-    return {"stdout": stdout, "stderr": proc.stderr, "exit_code": proc.returncode}
+    return {
+        "stdout": stdout,
+        "stderr": proc.stderr,
+        "exit_code": proc.exit_code,
+        "stdout_truncated": proc.stdout_truncated,
+        "stderr_truncated": proc.stderr_truncated,
+    }

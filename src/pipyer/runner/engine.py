@@ -31,6 +31,7 @@ from pipyer.runner.checkpoint import (
     write_checkpoint,
 )
 from pipyer.runner.components import StepFailure, get_executor
+from pipyer.runner.components._subproc import kill_active_children
 from pipyer.runner.context import (
     RunContext,
     StepState,
@@ -297,6 +298,12 @@ class _Engine:
                 status = "interrupted"
             except KeyboardInterrupt:
                 status = "interrupted"
+            finally:
+                # No orphans: kill any in-flight component process groups on
+                # every exit path (acceptance-run finding, 2026-06-11 - an
+                # interrupted runner must never leave children enforcing
+                # nothing). No-op when the registry is empty.
+                kill_active_children()
 
             if self.halt_reason is not None:
                 status = "halted"

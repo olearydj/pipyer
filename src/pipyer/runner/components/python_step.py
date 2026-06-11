@@ -8,12 +8,12 @@ timeout_s enforceable and keeps user code out of the runner process.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from typing import Any
 
 from pipyer.records.step_result import ErrorCategory
 from pipyer.runner.components import StepFailure
+from pipyer.runner.components._subproc import CaptureTimeout, run_captured
 
 
 def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]:
@@ -21,25 +21,27 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]
     if not script.is_file():
         raise StepFailure(ErrorCategory.UNCLASSIFIED, f"script not found: {script}")
     try:
-        proc = subprocess.run(
+        proc = run_captured(
             [sys.executable, str(script)],
-            input=json.dumps(resolved_inputs),
-            capture_output=True,
-            text=True,
+            input_text=json.dumps(resolved_inputs),
             cwd=ctx.workflow_dir,
-            timeout=step.config.timeout_s,
+            timeout_s=step.config.timeout_s,
         )
-    except subprocess.TimeoutExpired as error:
+    except CaptureTimeout as error:
         raise StepFailure(
             ErrorCategory.TIMEOUT,
-            f"script exceeded timeout_s={step.config.timeout_s}",
+            f"script exceeded timeout_s={step.config.timeout_s} (process group killed)",
             detail={"script": str(script)},
         ) from error
-    if proc.returncode != 0:
+    if proc.exit_code != 0:
         raise StepFailure(
             ErrorCategory.NONZERO_EXIT,
-            f"script exited {proc.returncode}",
-            detail={"script": str(script), "stderr": proc.stderr[-2000:]},
+            f"script exited {proc.exit_code}",
+            detail={
+                "script": str(script),
+                "stderr": proc.stderr[-2000:],
+                "stderr_truncated": proc.stderr_truncated,
+            },
         )
     try:
         output = json.loads(proc.stdout) if proc.stdout.strip() else None
@@ -47,6 +49,6 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]
         raise StepFailure(
             ErrorCategory.OUTPUT_VALIDATION_ERROR,
             "script stdout is not valid JSON",
-            detail={"stdout": proc.stdout[-2000:]},
+            detail={"stdout": proc.stdout[-2000:], "stdout_truncated": proc.stdout_truncated},
         ) from error
     return {"output": output}
