@@ -16,5 +16,12 @@ coverage.json
 # OS
 .DS_Store
 
+# Build
+dist/
+build/
+
 # Runs (local evidence; revisit when run-record layout settles)
 runs/
+
+# Spike scratch output (evidence summarized into the spike report; raw output disposable)
+spike/results/

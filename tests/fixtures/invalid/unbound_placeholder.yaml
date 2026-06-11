@@ -1,0 +1,18 @@
+schema_version: "1"
+name: unbound
+models:
+  grader:
+    model: "anthropic:claude-haiku-4-5"
+steps:
+  - name: grade
+    component: llm
+    config:
+      model: grader
+      prompt: prompts/two_placeholders.md
+      output_schema:
+        type: object
+    inputs:
+      first: inputs.who
+inputs:
+  who:
+    type: string

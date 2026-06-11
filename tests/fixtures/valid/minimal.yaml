@@ -1,0 +1,7 @@
+schema_version: "1"
+name: minimal
+steps:
+  - name: transform
+    component: python
+    config:
+      script: scripts/noop.py

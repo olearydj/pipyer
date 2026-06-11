@@ -1,0 +1,49 @@
+[project]
+name = "pipyer"
+version = "0.1.0"
+description = "Deterministic orchestration: the workflow controls what happens; the model works inside the steps"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+]
+
+[project.scripts]
+pipyer = "pipyer.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+    "ty",
+]
+spike = [
+    "anthropic>=0.107.1",
+    "pydantic-ai",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.0,<2.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["spike/results"]  # generated evidence, incl. deliberately-broken fixtures
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Conformance tests deliberately exercise pydantic's runtime coercion (string
+# enum values, dict submodels - records arrive from JSONL as strings, and that
+# coercion is the contract under test), which static argument typing rightly
+# flags. Targeted downgrade for tests only (R13); src stays fully checked.
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+invalid-argument-type = "ignore"

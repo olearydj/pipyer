@@ -1,0 +1,13 @@
+schema_version: "1"
+name: forward
+steps:
+  - name: early
+    component: python
+    config:
+      script: s.py
+    inputs:
+      later_value: steps.late.output
+  - name: late
+    component: python
+    config:
+      script: t.py

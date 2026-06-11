@@ -1,0 +1,18 @@
+schema_version: "1"
+name: unknown_alias
+models:
+  grader:
+    model: "anthropic:claude-haiku-4-5"
+steps:
+  - name: grade
+    component: llm
+    config:
+      model: scorer
+      prompt: prompts/one_placeholder.md
+      output_schema:
+        type: object
+    inputs:
+      name: inputs.who
+inputs:
+  who:
+    type: string

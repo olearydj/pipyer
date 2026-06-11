@@ -1,0 +1,71 @@
+schema_version: "1"
+name: full_featured
+description: Exercises every schema area
+inputs:
+  data_dir:
+    type: path
+  threshold:
+    type: number
+    required: false
+    default: 0.5
+models:
+  grader:
+    model: matrix.grader_model
+    settings:
+      temperature: 0.2
+matrix:
+  grader_model:
+    - "anthropic:claude-haiku-4-5"
+    - "ollama:qwen2.5-coder"
+steps:
+  - name: collect
+    component: python
+    config:
+      script: scripts/collect.py
+    inputs:
+      data_dir: inputs.data_dir
+  - name: read_each
+    component: file_read
+    each: steps.collect.items
+    config:
+      path: item
+      format: text
+  - name: grade
+    component: llm
+    each: steps.collect.items
+    config:
+      model: grader
+      prompt: prompts/greet.md
+      output_schema:
+        type: object
+        properties:
+          score:
+            type: integer
+        required:
+          - score
+    inputs:
+      name: item
+      content: steps.read_each.content
+  - name: check
+    component: assertions
+    each: steps.collect.items
+    config:
+      checks:
+        - input: score
+          op: gte
+          expected: 0
+    inputs:
+      score: steps.grade.output.score
+  - name: write_out
+    component: file_write
+    config:
+      path: inputs.data_dir
+      format: json
+    inputs:
+      content: steps.grade.output
+settings:
+  concurrency: 2
+  max_failures: 3
+  max_failure_rate: 0.5
+outputs:
+  grades: steps.grade.output

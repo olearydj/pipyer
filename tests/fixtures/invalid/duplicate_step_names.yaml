@@ -1,0 +1,11 @@
+schema_version: "1"
+name: duplicates
+steps:
+  - name: twin
+    component: python
+    config:
+      script: s.py
+  - name: twin
+    component: python
+    config:
+      script: t.py

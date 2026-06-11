@@ -1,0 +1,9 @@
+schema_version: "1"
+name: selfref
+steps:
+  - name: loop
+    component: python
+    config:
+      script: s.py
+    inputs:
+      me: steps.loop.output

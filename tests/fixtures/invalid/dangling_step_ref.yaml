@@ -1,0 +1,13 @@
+schema_version: "1"
+name: dangling
+steps:
+  - name: run_tests
+    component: python
+    config:
+      script: s.py
+  - name: use
+    component: python
+    config:
+      script: t.py
+    inputs:
+      test_output: steps.run_test.stdout

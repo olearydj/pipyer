@@ -1,0 +1,7 @@
+schema_version: "99"
+name: future
+steps:
+  - name: a
+    component: python
+    config:
+      script: s.py
