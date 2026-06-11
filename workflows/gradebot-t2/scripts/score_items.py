@@ -11,6 +11,30 @@ import json
 import sys
 
 
+def normalize_tests(entry):
+    """Tolerate harness stdout that arrived as raw text.
+
+    Submissions with module-level prints contaminated stdout before the JSON
+    summary line (acceptance-run finding); the summary is the final line, so
+    extract it. The harness now captures student stdout, but completed run
+    records from before that fix are salvaged here rather than re-executed.
+    Anything unparseable is treated as no result (an explicit ungraded row).
+    """
+    if entry is None or isinstance(entry, dict):
+        return entry
+    if isinstance(entry, str):
+        for line in reversed(entry.strip().splitlines()):
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    parsed = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed, dict) and "execution_success" in parsed:
+                    return parsed
+    return None
+
+
 def main() -> None:
     inputs = json.load(sys.stdin)
     items = inputs["items"]
@@ -20,7 +44,7 @@ def main() -> None:
 
     rows = []
     for index, item in enumerate(items):
-        tests = test_results[index] if index < len(test_results) else None
+        tests = normalize_tests(test_results[index] if index < len(test_results) else None)
         grade = grades[index] if index < len(grades) else None
         row = {
             "student_id": item["student_id"],
