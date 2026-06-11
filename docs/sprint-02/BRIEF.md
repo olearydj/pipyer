@@ -159,16 +159,22 @@ implement that flow. What each piece implies:
 - Band-filtered cross-validation (review agents over 0.44-0.88 scorers) is expressible in
   the existing schema - a `python` filter step feeding an `llm_judge` `each` step - and
   needs no new components. A candidate second workflow, post-002.
-- Patching and publication are the genuinely new concept: human-approved corrections to
-  individual item results, and a published view derived from (run + amendments). Pipyer
-  records are immutable events, so the fit is amendment records - append-only corrections
-  referencing the original `StepResult` (target, field, old, new, reason, author,
-  timestamp), with published totals as a derived artifact, never a mutation. The
-  academic-integrity override is the same shape (published ≠ graded, with reason and
-  preserved evidence). This is deferred with a named consumer (this exact grading process,
-  every term) and belongs in the backlog as a candidate Feature 005 - it composes with
-  ADR-006's append-friendly records and the evidence-layer philosophy: corrections are
-  events too.
+- Patching and publication need no new machinery either - they are the tail of the same
+  workflow. Human-approved corrections live in a human-authored data file (`patches.yaml`:
+  student, problem, field, old, new, reason - an intent-layer artifact, like a rubric)
+  declared as a workflow input defaulting to empty; applying it is a deterministic `python`
+  step producing published totals; publication is `file_write`. The iteration loop falls
+  out of resume semantics (R5) for free: editing the patches file changes only the
+  finalization tail's input hashes, so a rerun regrades nothing and recomputes only
+  apply-and-publish - each iteration a complete evidenced run, with the patches file's
+  hash in the provenance chain automatically. Corrections key to domain identity
+  (student × problem), surviving regrades. The academic-integrity override is a patch row
+  with a reason. One required guard, in the step rather than the schema: the apply step
+  asserts each patch's `old` value matches what the run produced and fails loudly when a
+  regrade has shifted under a correction - stale patches must never apply silently.
+  Extending the GradeBot workflow with this tail is post-002 work (the acceptance run
+  benchmarks grading, not finalization), but it is expressible in the existing schema the
+  day the runner exists - no new feature required.
 
 ## 7. Gate
 
