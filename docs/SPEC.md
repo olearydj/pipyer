@@ -77,7 +77,7 @@ Everything else is composition, not reimplementation: existing CLIs run as `shel
 
 ### Practicalities
 
-Python 3.12+, Pydantic v2, PydanticAI current stable; managed with `uv` exclusively. Secrets (provider API keys) come from environment variables only; workflow files never contain credentials. Local-first: no hosted services required to run.
+Python 3.12+, Pydantic v2, PydanticAI current stable; managed with `uv` exclusively, built with `uv_build`. CLIs use typer; formatting and linting are `ruff format` / `ruff check`; type checking is `ty`. Secrets (provider API keys) are resolved at call time via the household 1Password pattern (`op read` with environment-variable fallback, provider chain `auto`/`1password`/`env`, per the twc-bridge/danvas implementations); workflow files and run records never contain credentials. Local-first: no hosted services required to run.
 
 ## 9. V1 Definition and Success Criteria
 
