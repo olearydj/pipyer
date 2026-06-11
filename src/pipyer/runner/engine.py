@@ -376,13 +376,22 @@ class _Engine:
             if state is None:
                 continue
             key = unit_key(event["step"], event.get("item_index"))
+            # Latest record wins, and the three states are mutually exclusive:
+            # a unit retried to success must shed its stale failure AND its
+            # stale skip marker (acceptance-run finding - compare succeeded on
+            # retry but a prior-segment skip record kept blocking downstream).
             if event.get("status") == "success":
                 state.projections[key] = event.get("output")
                 state.failed.discard(key)
+                state.skipped.discard(key)
             elif event.get("status") == "failure":
                 state.failed.add(key)
+                state.skipped.discard(key)
+                state.projections.pop(key, None)
             else:
                 state.skipped.add(key)
+                state.failed.discard(key)
+                state.projections.pop(key, None)
         # Fresh run re-evaluates skips and failures; only successes carry over
         # as resolvable projections. Failed/skipped sets reset per unit at
         # execution time below.
@@ -578,6 +587,7 @@ class _Engine:
                 attempt=attempt,
             )
             state.skipped.add(key)
+            state.failed.discard(key)
             self.totals.skipped += 1
             return
 
@@ -599,6 +609,7 @@ class _Engine:
                 attempt=attempt,
             )
             state.failed.add(key)
+            state.skipped.discard(key)
             self.totals.failed += 1
             self.totals.attempted += 1
             self.failure_count += 1
@@ -625,6 +636,7 @@ class _Engine:
         )
         state.projections[key] = projection
         state.failed.discard(key)
+        state.skipped.discard(key)
         self.totals.succeeded += 1
         self.totals.attempted += 1
         if key in self.prior_completed:
