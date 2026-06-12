@@ -25,7 +25,7 @@ Behavior:
 - Secrets preflight (research R15) after validation, before run-directory creation; failure raises `SecretResolutionError` naming alias, key, providers tried.
 - Creates `<results_dir>/<run_id>/` per the run-directory contract; acquires the single-writer lock; appends `run_started` with the full config snapshot (test hooks included when used).
 - Executes per SPEC section 6 semantics; returns a `Run` whose fields are listed in `data-model.md`.
-- `resume`: locates the prior run (id or lexically-last), replays `events.jsonl` (authoritative; checkpoint is an optimization), computes the resume diff, appends `run_resumed`, executes only non-matching units. `recomputed_step_count == 0` when nothing changed (fixture 1).
+- `resume`: locates the prior run (id or lexically-last), replays `events.jsonl` (authoritative; checkpoint is an optimization), appends `run_resumed` carrying the boundary-knowable diff (carryover decisions plus hash-skip eligibility), executes only non-matching units, and records the realized diff (actually skipped vs recomputed - hashes compare lazily per unit) in `run_finished.totals`. `recomputed_step_count == 0` when nothing changed (fixture 1). *(Wording aligned at post-exit review: the full diff is realized at terminal, not at the boundary.)*
 - Never raises for step failures, budget halts, or injected interruption - those are recorded statuses; exceptions are reserved for pre-run errors (validation, preflight, lock conflict, missing prior run) and programmer errors.
 
 ## `reconstruct_checkpoint`

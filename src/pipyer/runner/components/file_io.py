@@ -26,7 +26,18 @@ def _read_path(raw: str, workflow_dir: Path) -> Path:
 
 def _write_path(raw: str, outputs_dir: Path) -> Path:
     path = Path(raw)
-    return path if path.is_absolute() else outputs_dir / path
+    if path.is_absolute():
+        return path  # explicitly allowed by the run-directory contract
+    resolved = (outputs_dir / path).resolve()
+    # Review finding: `../../../x` escaped results_dir while recording
+    # success. Relative paths are contracted to resolve UNDER outputs/.
+    if not resolved.is_relative_to(outputs_dir.resolve()):
+        raise StepFailure(
+            ErrorCategory.UNCLASSIFIED,
+            f"relative write path escapes the run outputs directory: {raw}",
+            detail={"path": raw},
+        )
+    return resolved
 
 
 def execute_read(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]:

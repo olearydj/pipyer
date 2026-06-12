@@ -89,10 +89,14 @@ class EachExpandedEvent(_Model):
 
 
 class RunResumedEvent(_Model):
-    """The resume boundary: one event whose payload is the resume diff (R20).
+    """The resume boundary (R20): carryover decisions plus skip eligibility.
 
-    Keys in the lists follow the execution-unit convention: "<step>" for scalar
-    steps, "<step>[<index>]" for `each` items.
+    `skipped` lists prior successes ELIGIBLE for hash-match skip at the
+    boundary; the realized diff (actually skipped vs recomputed - hashes
+    compare lazily per unit) is in `run_finished.totals.resume_skipped` /
+    `.recomputed`. `recompute` is reserved (boundary-time recompute reasons
+    are not knowable in general). Keys follow the execution-unit convention:
+    "<step>" for scalar steps, "<step>[<index>]" for `each` items.
     """
 
     event: Literal["run_resumed"] = "run_resumed"

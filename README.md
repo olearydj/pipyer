@@ -2,7 +2,7 @@
 
 Pipyer is a deterministic orchestration tool for reproducible LLM pipelines: the workflow controls what happens; the model works inside the steps. Declarative data defines the shape, Python and shell do the deterministic work, LLMs supply judgment within steps, and every run leaves a complete evidence record (inputs, outputs, failures, cost) that supports resume, comparison, and improvement.
 
-Status: Feature 001 complete (2026-06-11) - the workflow and run-record contracts exist as code with a passing conformance suite, `pipyer validate` works, the PydanticAI capability spike confirmed the standalone-runner boundary (T013 gate: GO), and the GradeBot fixture passed the workflows-are-data falsification census. Feature 002 (the runner) is next.
+Status: Features 001 and 002 complete (2026-06-12). The contracts exist as code, `pipyer validate` and `pipyer run` work end to end - sequential steps, `each` batching with failure budgets, content-hash resume, JSONL evidence with derived summaries, cost capture - and the runner passed its acceptance gate by re-grading a real archived exam against its own history (89% exact reproduction, every disagreement classified; `specs/002-workflow-runner/acceptance-evidence.md`). Feature 003 (matrix execution and run comparison) is next; its brief is `docs/sprint-03/BRIEF.md`.
 
 ## Orientation
 

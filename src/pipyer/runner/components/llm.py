@@ -26,6 +26,7 @@ from pydantic_ai.exceptions import (
 )
 from pydantic_ai.models.test import TestModel
 
+from pipyer.prompts import render_prompt
 from pipyer.records.step_result import ErrorCategory, UsageCost
 from pipyer.runner.components import StepFailure
 from pipyer.secrets import SecretResolutionError, resolve_secret
@@ -122,7 +123,10 @@ def _build_model(alias, *, model_overrides: dict[str, Any], alias_name: str, for
                 f"secret resolution failed at call time for {key}",
                 detail={"kind": "secret_resolution_failed", "error": str(error)},
             ) from error
-        os.environ.setdefault(key, secret)
+        # Unconditional: the provider chain's decision is authoritative
+        # (review finding - setdefault let a stale pre-set env var win while
+        # the record claimed the 1Password provider was used).
+        os.environ[key] = secret
     return model  # string form; pydantic_ai infers ("test" -> TestModel)
 
 
@@ -189,11 +193,9 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> tuple[dict[str
     )
 
     prompt_text = (ctx.workflow_dir / config.prompt).read_text(encoding="utf-8")
-    rendered = prompt_text.format(
-        **{
-            k: v if isinstance(v, str) else json.dumps(v, indent=2, default=str)
-            for k, v in resolved_inputs.items()
-        }
+    rendered = render_prompt(
+        prompt_text,
+        resolved_inputs,
     )
 
     agent = Agent(  # ty: ignore[no-matching-overload]

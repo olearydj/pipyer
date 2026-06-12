@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import concurrent.futures
 import subprocess
+import traceback
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +85,17 @@ class _Totals:
     skipped: int = 0
     resume_skipped: list[str] = field(default_factory=list)
     recomputed: list[str] = field(default_factory=list)
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost: Decimal = Decimal("0")
+
+    def add_usage(self, usage) -> None:
+        if usage is None:
+            return
+        self.input_tokens += usage.input_tokens or 0
+        self.output_tokens += usage.output_tokens or 0
+        if usage.estimated_cost is not None:
+            self.estimated_cost += Decimal(str(usage.estimated_cost))
 
 
 def _git_commit(workflow_dir: Path) -> str | None:
@@ -541,6 +554,18 @@ class _Engine:
             return ("failure", key, started, failure, input_hash, input_refs)
         except UpstreamFailure as failure:
             return ("skip", key, started, failure.upstream_key, input_refs)
+        except Exception as error:  # noqa: BLE001 - the audit trail survives any component bug
+            # Review finding: unhandled component exceptions (malformed JSON in
+            # file_read, missing shell executable, missing schema file) were
+            # aborting the run with no terminal record. Every failure is a
+            # record; `unclassified` is the honest category for shapes the
+            # component did not map.
+            failure = StepFailure(
+                ErrorCategory.UNCLASSIFIED,
+                f"unhandled component exception: {type(error).__name__}: {error}",
+                detail={"traceback": traceback.format_exc()[-2000:]},
+            )
+            return ("failure", key, started, failure, input_hash, input_refs)
         if isinstance(outcome, tuple):
             projection, usage = outcome
         else:
@@ -612,6 +637,7 @@ class _Engine:
             state.skipped.discard(key)
             self.totals.failed += 1
             self.totals.attempted += 1
+            self.totals.add_usage(failure.usage)
             self.failure_count += 1
             if key in self.prior_completed:
                 self.totals.recomputed.append(key)
@@ -639,6 +665,7 @@ class _Engine:
         state.skipped.discard(key)
         self.totals.succeeded += 1
         self.totals.attempted += 1
+        self.totals.add_usage(usage)
         if key in self.prior_completed:
             self.totals.recomputed.append(key)
         self._write_snapshot()
@@ -729,6 +756,13 @@ class _Engine:
             "not_attempted": getattr(self, "totals_not_attempted", 0),
             "resume_skipped": self.totals.resume_skipped,
             "recomputed": self.totals.recomputed,
+            # The run-record contract promises tokens and estimated cost in
+            # totals (review finding: they were only derivable from the log).
+            "input_tokens": self.totals.input_tokens,
+            "output_tokens": self.totals.output_tokens,
+            "estimated_cost": (
+                str(self.totals.estimated_cost) if self.totals.estimated_cost else None
+            ),
             "outputs": _hashable(outputs),
         }
 

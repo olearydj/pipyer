@@ -52,10 +52,16 @@ class ResumePlan:
         self.retry_units = self.failed_units if retry_failed else set()
 
     def boundary_event(self, *, schema_version: str, lock_reclaimed: bool, at) -> RunResumedEvent:
+        # `skipped` carries what is knowable at the boundary: the prior
+        # successes ELIGIBLE for hash-match skip. The realized diff (which
+        # actually skipped vs recomputed - hashes compare lazily per unit)
+        # lands in run_finished.totals. Review finding: these fields were
+        # promised by the event schema and left empty.
         return RunResumedEvent(
             schema_version=schema_version,
             run_id=self.run_id,
             resumed_from_status=self.prior_status,
+            skipped=sorted(self.completed),
             failed_not_retried=sorted(self.failed_units - self.retry_units),
             failed_retried=sorted(self.retry_units),
             lock_reclaimed=lock_reclaimed,
