@@ -15,7 +15,7 @@ import yaml
 from pydantic import ValidationError
 
 from pipyer.prompts import extract_placeholders
-from pipyer.schema.components import AssertionsConfig, LlmConfig, LlmJudgeConfig
+from pipyer.schema.components import AssertionsConfig, LlmConfig, LlmJudgeConfig, PythonConfig
 from pipyer.schema.refs import ESCAPE_HATCH, Kind, Ref, classify
 from pipyer.schema.workflow import SUPPORTED_SCHEMA_VERSIONS, Workflow
 
@@ -246,6 +246,30 @@ def validate_workflow(workflow: Workflow, base_dir: Path | None = None) -> list[
         config = step.config
         if hasattr(config, "path"):
             resolve(config.path, f"{loc_base}.config.path", step_index=i, in_each=in_each)
+
+        # Rule 6a (review finding): python script files are checkable at
+        # dry-run exactly like prompt files - a missing script must fail up
+        # front, not at runtime as `unclassified`.
+        if isinstance(config, PythonConfig):
+            script_loc = f"{loc_base}.config.script"
+            if base_dir is None:
+                add(
+                    Issue(
+                        loc=script_loc,
+                        code="script_base_dir_missing",
+                        message="script files cannot be checked without a base directory; "
+                        "pass base_dir (the workflow file's directory; explicit for "
+                        "direct construction)",
+                    )
+                )
+            elif not (Path(base_dir) / config.script).is_file():
+                add(
+                    Issue(
+                        loc=script_loc,
+                        code="script_file_missing",
+                        message=f"script file not found: {config.script}",
+                    )
+                )
 
         # Rules 5-6: llm/llm_judge alias existence and prompt coverage.
         if isinstance(config, LlmConfig | LlmJudgeConfig):

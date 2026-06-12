@@ -9,7 +9,7 @@ secret resolution (R15), wall-clock timeout_s, and usage→cost capture (FR-006)
 
 from __future__ import annotations
 
-import concurrent.futures
+import asyncio
 import json
 import os
 from decimal import Decimal
@@ -212,19 +212,22 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> tuple[dict[str
 
     max_attempts = config.max_validation_retries + 1
 
-    def _call():
-        return agent.run_sync(rendered)
+    async def _acall():
+        # asyncio.wait_for CANCELS the in-flight call on timeout - the HTTP
+        # request is torn down, not abandoned in a thread the executor would
+        # then wait on. (Review finding: the previous ThreadPoolExecutor form
+        # raised on timeout but blocked at context exit until the hung call
+        # returned, so timeout_s was not actually a wall-clock bound.)
+        if config.timeout_s is not None:
+            return await asyncio.wait_for(agent.run(rendered), timeout=config.timeout_s)
+        return await agent.run(rendered)
 
     try:
-        if config.timeout_s is not None:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                result = pool.submit(_call).result(timeout=config.timeout_s)
-        else:
-            result = _call()
-    except concurrent.futures.TimeoutError:
+        result = asyncio.run(_acall())
+    except TimeoutError:
         raise StepFailure(
             ErrorCategory.TIMEOUT,
-            f"model call exceeded timeout_s={config.timeout_s}",
+            f"model call exceeded timeout_s={config.timeout_s} (call cancelled)",
             usage=None,
         ) from None
     except IncompleteToolCall as error:

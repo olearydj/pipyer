@@ -74,15 +74,18 @@ def test_error_message_names_the_escape_hatch():
 def test_item_scope_enforced_by_validation():
     from pipyer.validation import validate_data
 
+    # shell steps: this test is about `item`/`index` scoping, and shell has no
+    # file-existence rule to satisfy (script existence is rule 6a, tested in
+    # the workflow-schema fixtures).
     data = {
         "schema_version": "2",
         "name": "scope",
         "steps": [
-            {"name": "src", "component": "python", "config": {"script": "s.py"}},
+            {"name": "src", "component": "shell", "config": {"command": ["true"]}},
             {
                 "name": "fan",
-                "component": "python",
-                "config": {"script": "t.py"},
+                "component": "shell",
+                "config": {"command": ["true"]},
                 "each": "steps.src.items",
                 "inputs": {"value": "item", "position": "index"},
             },

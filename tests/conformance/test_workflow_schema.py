@@ -26,6 +26,7 @@ INVALID_EXPECTATIONS = {
     "matrix_non_list": ("list_type", "matrix.model"),
     "matrix_empty_dimension": ("too_short", "matrix.model"),
     "root_prefixed_non_ref": ("malformed_ref", "steps[0].inputs.note"),
+    "missing_python_script": ("script_file_missing", "steps[0].config.script"),
 }
 
 

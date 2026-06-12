@@ -1,0 +1,10 @@
+# Invalid: a python step's script file does not exist (review finding - rule 6a:
+# script existence is checkable at dry-run exactly like prompt files).
+schema_version: "2"
+name: missing_script
+steps:
+  - name: transform
+    component: python
+    config:
+      script: scripts/does_not_exist.py
+    inputs: {}
