@@ -1,5 +1,7 @@
 <!-- Sync Impact Report
-- Version change: 2.0.0 → 2.1.0
+- Version change: 2.1.0 → 2.2.0
+- Amendment (2026-06-12): Governance gains the contracts-versus-implementation sweep as a standing feature-exit review item. Evidence: two post-acceptance external review rounds on Feature 002 found their findings exclusively in contract/implementation seams that design-level review does not reach. MINOR bump: materially expanded guidance.
+- Prior entry: 2.0.0 → 2.1.0
 - Amendment (2026-06-11, owner toolchain and secrets directives):
   - Operational Constraints, stack: added uv_build backend, typer for CLIs, ruff for format/lint, ty for type checking (owner standards; rationale and reference implementations recorded in feature-001 research R13).
   - Operational Constraints, secrets: environment-only replaced by the household 1Password pattern (op read with env fallback, provider chain auto/1password/env), shipped twice in twc-bridge and danvas (research R14). Load-bearing rule unchanged: never in workflow files or run records; provenance (which provider) recordable, value never. MINOR bump: materially expanded guidance, no principle changed.
@@ -111,6 +113,7 @@ This constitution supersedes all other practices for Pipyer. The full design rec
 - Amendment procedure: any change to principles or constraints requires a documented rationale, an updated or new ADR when a settled decision changes, a version bump per the policy below, and propagation to `.specify/templates/` and dependent specs and plans in the same change.
 - Versioning policy: MAJOR for backward-incompatible removals or redefinitions of principles; MINOR for new principles or materially expanded guidance; PATCH for clarifications, wording, and non-semantic refinements.
 - Compliance review: every PR and every plan's Constitution Check MUST verify conformance with Principles I-VII. The named breach signals (language creep, wrapper drift, platform trap, silent omission of failures) are standing review checklist items.
+- Contracts-versus-implementation sweep: feature exit review includes a mechanical pass over every promise in the feature's contract documents - each field, validation, bound, and output line checked against observed code behavior, never assumed from the design record. Rationale: both post-acceptance review rounds of Feature 002 found their defects exclusively in these seams (promised event fields left empty, a promised validation not performed, a promised timeout not enforced, promised totals fields absent). Design-level review catches decision drift; only a promise-by-promise sweep catches implementation drift.
 - Runtime development guidance lives in `CLAUDE.md` at the repository root.
 
-**Version**: 2.1.0 | **Ratified**: 2026-06-10 | **Last Amended**: 2026-06-11
+**Version**: 2.2.0 | **Ratified**: 2026-06-10 | **Last Amended**: 2026-06-12
