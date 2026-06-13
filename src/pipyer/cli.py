@@ -176,7 +176,8 @@ def run(
         tokens_in = totals.get("input_tokens", 0)
         tokens_out = totals.get("output_tokens", 0)
         if cost or tokens_in or tokens_out:
-            typer.echo(f"  cost: ${cost or '0'} ({tokens_in} in / {tokens_out} out tokens)")
+            cost_text = f"${cost}" if cost is not None else "n/a"
+            typer.echo(f"  cost: {cost_text} ({tokens_in} in / {tokens_out} out tokens)")
         typer.echo(f"  summary: {result.run_dir / 'summary.md'}")
 
     if result.status == "interrupted":

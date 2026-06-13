@@ -27,8 +27,8 @@
 - Added sections: Operational Constraints; Development Workflow & Quality Gates
 - Removed sections: none
 - Templates:
-  - ✅ .specify/templates/plan-template.md (Constitution Check gates filled in)
-  - ✅ .specify/templates/tasks-template.md (conformance-test mandate noted)
+  - ✅ .specify/templates/plan-template.md (Constitution Check gates synced to v2.2.0)
+  - ✅ .specify/templates/tasks-template.md (conformance-test mandate and exit sweep noted)
   - ✅ .specify/templates/spec-template.md (no changes required; already aligned)
   - ✅ CLAUDE.md (pointer to constitution added)
   - N/A .specify/templates/commands/ (directory not present)

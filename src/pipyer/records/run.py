@@ -116,6 +116,12 @@ class RunHaltedEvent(_Model):
     schema_version: str
     run_id: str
     reason: str
+    attempted: int = 0
+    failed: int = 0
+    not_attempted: int = 0
+    attempted_units: list[str] = Field(default_factory=list)
+    failed_units: list[str] = Field(default_factory=list)
+    not_attempted_units: list[str] = Field(default_factory=list)
     at: datetime
 
 

@@ -63,8 +63,8 @@ Counts item failures per `each` step and run-wide; trips when `max_failures` exc
 
 | Field | Type |
 |-------|------|
-| `skipped` | `list[key]` (hash match) |
-| `recompute` | `list[{key, reason: inputs\|config\|workflow}]` |
+| `skipped` | `list[key]` (prior successes eligible for hash-match skip at the boundary) |
+| `recompute` | `list[{key, reason}]` reserved; realized recomputes are recorded in `run_finished.totals.recomputed` |
 | `failed_not_retried` | `list[key]` |
 | `failed_retried` | `list[key]` (only with `--retry-failed`) |
 | `lock_reclaimed` | `bool` |
@@ -75,7 +75,7 @@ Counts item failures per `each` step and run-wide; trips when `max_failures` exc
 - `each_expanded`: `{step, item_count}` - emitted even when `item_count == 0` (fixture 7).
 - `step_result`: wraps `StepResult`; skip records carry `error.category == "upstream_failure"` with the upstream key in detail.
 - `run_resumed`: resume diff payload above.
-- `run_halted`: `{halt_reason, attempted, failed, not_attempted}`.
+- `run_halted`: `{halt_reason, attempted, failed, not_attempted, attempted_units, failed_units, not_attempted_units}`.
 - `run_finished`: terminal totals.
 
 ## Comparison record (workflow output, not a runner type)

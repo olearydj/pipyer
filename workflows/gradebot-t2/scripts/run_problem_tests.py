@@ -38,7 +38,7 @@ class _CappedIO(io.StringIO):
 def run_case(fn, case):
     try:
         got = fn(*case["inputs"])
-    except Exception as error:  # student code; any failure is an outcome
+    except BaseException as error:  # student code; any failure is an outcome
         return {"description": case["description"], "passed": False, "error": repr(error)}
     expected = case["expected_return"]
     # exact_match with list/tuple leniency (students legitimately return either)
@@ -73,7 +73,7 @@ def main() -> None:
                 else:
                     result["execution_success"] = True
                     result["cases"] = [run_case(fn, case) for case in cases]
-        except Exception as error:
+        except BaseException as error:
             result["error"] = repr(error)
     result["student_stdout"] = student_out.getvalue()
     result["student_stdout_truncated"] = student_out.truncated

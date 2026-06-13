@@ -6,7 +6,7 @@ The evidence-side contract. Full field definitions live in [data-model.md](../da
 
 1. No silent omissions. Every step execution outcome - success, failure of any category, skip - is representable as a status-bearing `StepResult`. Failure budgets halting a run is itself a recorded event (`run_halted`).
 2. Positional identity. Per-item records carry `item_index`; duplicate item values never make records ambiguous. `entity_id` is optional and additive.
-3. Cost is first-class. Every `llm`/`llm_judge` result carries provider, model, token counts, estimated cost, cost-table version, and `counts_source` (provider-reported vs estimated). Internal validation attempts are counted in `validation_attempts` - bounded, visible, and non-multiplying with runner-level `attempt`.
+3. Cost is first-class. Every `llm`/`llm_judge` result carries provider, model, token counts when available, estimated cost, cost-table version, and `counts_source` (provider-reported, estimated, or unavailable). Internal validation attempts are counted in `validation_attempts` - bounded, visible, and non-multiplying with runner-level `attempt`.
 4. Matrix parameters attach to every relevant result; cost and quality aggregate by dimension without joins against external state.
 5. Provenance: each result records `input_refs` (where every input came from) and `input_hash` (what the inputs were, for resume matching).
 6. The error taxonomy is a closed enum with an explicit `unclassified` member; nothing is coerced into a wrong category.
@@ -24,6 +24,7 @@ Schema-level (must pass in this feature):
 | Skip record with `upstream_failure` reason | Validates |
 | LLM result without usage | Rejected (usage required for LLM components) |
 | Usage with `counts_source: estimated` and no cost table | Validates (local-model case) |
+| Failure usage with `counts_source: unavailable` and no token counts | Validates (attempt metadata only) |
 | Matrix params attached; aggregation by dimension over a fixture log | Totals match hand-computed values |
 | Duplicate item values, distinct `item_index` | Unambiguous |
 | Run-level record with/without `git_commit` | Validates |

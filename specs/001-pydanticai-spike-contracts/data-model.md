@@ -32,7 +32,7 @@ Two contract families: the workflow schema (authoring side) and the run-record s
 | Field | Type | Rules |
 |-------|------|-------|
 | `model` | str \| Ref | Model identifier (e.g. `provider:model-name`) or a dotted-path reference to a workflow input or matrix dimension - the DEMA pattern for varying models per cell. |
-| `settings` | dict[str, JSON] | Optional model settings (temperature, max tokens). No credential fields exist; secrets are environment-only. |
+| `settings` | dict[str, JSON] | Optional model settings (temperature, max tokens). No credential fields exist; secrets resolve outside workflow data via the R14 provider chain. |
 
 ### Step
 
@@ -141,10 +141,10 @@ Structural validation (`model_validate`) plus these cross-checks, every failure 
 |-------|------|
 | `provider` | str |
 | `model` | str |
-| `input_tokens` / `output_tokens` | int |
+| `input_tokens` / `output_tokens` | int \| null |
 | `estimated_cost` | decimal (string-serialized) \| None |
 | `cost_table_version` | str \| None |
-| `counts_source` | enum: `provider_reported`, `estimated` |
+| `counts_source` | enum: `provider_reported`, `estimated`, `unavailable` |
 | `validation_attempts` | int = 1 (internal attempts consumed, bounded and visible - FR-002) |
 
 ### StepError

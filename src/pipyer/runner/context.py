@@ -107,6 +107,7 @@ class RunContext:
         snapshot: dict[str, Any] = {
             "inputs": self.inputs,
             "settings": self.settings.model_dump(mode="json"),
+            "matrix": self.workflow.matrix,
             "models": {
                 name: {
                     "model": alias.model,
@@ -172,6 +173,9 @@ class RunContext:
             if key in state.failed or key in state.skipped:
                 raise UpstreamFailure(key)
             return _navigate(state.projections[key], rest, str(ref))
+        scalar_key = unit_key(step_name, None)
+        if scalar_key in state.failed or scalar_key in state.skipped:
+            raise UpstreamFailure(scalar_key)
         if index is not None:
             # Aligned access from inside an each unit: same index, by position.
             key = unit_key(step_name, index)

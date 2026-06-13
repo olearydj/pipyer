@@ -41,7 +41,13 @@ class EventLog:
             fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             self._handle_existing_lock()
-            fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError as error:
+                raise RunLockedError(
+                    f"event log {self.path} lock was reclaimed by another writer; "
+                    "a run directory has exactly one writer"
+                ) from error
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(
                 {"pid": os.getpid(), "started_at": datetime.now(UTC).isoformat()},

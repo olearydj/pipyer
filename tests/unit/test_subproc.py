@@ -66,6 +66,20 @@ def test_timeout_kills_entire_process_group(tmp_path):
     assert _wait_dead(grandchild), "grandchild survived the group kill"
 
 
+def test_timeout_applies_while_child_ignores_large_stdin(tmp_path):
+    script = tmp_path / "ignore_stdin.py"
+    script.write_text("import time\ntime.sleep(3)\n")
+    started = time.monotonic()
+    with pytest.raises(CaptureTimeout):
+        run_captured(
+            [sys.executable, str(script)],
+            input_text="x" * (2 * MAX_CAPTURE_BYTES),
+            cwd=tmp_path,
+            timeout_s=1,
+        )
+    assert time.monotonic() - started < 2.5
+
+
 def test_kill_active_children_reaps_in_flight_groups(tmp_path):
     """The engine's interrupt path can kill children another thread is waiting on."""
     pid_file = tmp_path / "child.pid"

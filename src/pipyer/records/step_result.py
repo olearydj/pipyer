@@ -49,7 +49,7 @@ class UsageCost(_Model):
     output_tokens: int | None = Field(default=None, ge=0)
     estimated_cost: Decimal | None = None
     cost_table_version: str | None = None
-    counts_source: Literal["provider_reported", "estimated"]
+    counts_source: Literal["provider_reported", "estimated", "unavailable"]
     validation_attempts: int = Field(default=1, ge=1)
 
     @field_serializer("estimated_cost")

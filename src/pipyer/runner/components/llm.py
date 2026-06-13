@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from pydantic_ai import Agent, ModelRetry, NativeOutput, PromptedOutput, StructuredDict
 from pydantic_ai.exceptions import (
@@ -35,6 +34,9 @@ from pipyer.secrets import SecretResolutionError, resolve_secret
 PROVIDER_KEYS = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "openai-chat": "OPENAI_API_KEY",
+    "openai-responses": "OPENAI_API_KEY",
+    "google": "GOOGLE_API_KEY",
     "google-gla": "GOOGLE_API_KEY",
     "groq": "GROQ_API_KEY",
     "mistral": "MISTRAL_API_KEY",
@@ -56,10 +58,29 @@ def secret_key_for(model: str, settings: dict[str, Any]) -> str | None:
     """The env key an alias needs, or None (test models and local endpoints)."""
     if settings.get("base_url"):
         return None
-    prefix = model.split(":", 1)[0] if ":" in model else model
+    prefix = (model.split(":", 1)[0] if ":" in model else model).removeprefix("gateway/")
     if prefix == "test" or model == "test":
         return None
     return PROVIDER_KEYS.get(prefix)
+
+
+def _build_hosted_model(model: str, *, key: str, secret: str):
+    """Build a pydantic-ai model with an explicit provider key.
+
+    The key must not be written to `os.environ`: shell/python components scrub
+    inherited env too, but model construction should be scoped to this object.
+    """
+    from pydantic_ai.models import infer_model
+    from pydantic_ai.providers import infer_provider, infer_provider_class
+
+    def provider_factory(provider_name: str):
+        provider_key = PROVIDER_KEYS.get(provider_name.removeprefix("gateway/"))
+        if provider_key == key:
+            provider_class = cast(Any, infer_provider_class(provider_name))
+            return provider_class(api_key=secret)
+        return infer_provider(provider_name)
+
+    return infer_model(model, provider_factory=provider_factory)
 
 
 def _schema_issues(schema: dict[str, Any], value: Any) -> list[str]:
@@ -123,10 +144,7 @@ def _build_model(alias, *, model_overrides: dict[str, Any], alias_name: str, for
                 f"secret resolution failed at call time for {key}",
                 detail={"kind": "secret_resolution_failed", "error": str(error)},
             ) from error
-        # Unconditional: the provider chain's decision is authoritative
-        # (review finding - setdefault let a stale pre-set env var win while
-        # the record claimed the 1Password provider was used).
-        os.environ[key] = secret
+        return _build_hosted_model(model, key=key, secret=secret)
     return model  # string form; pydantic_ai infers ("test" -> TestModel)
 
 
@@ -158,6 +176,11 @@ def _usage_cost(alias, usage, *, attempts: int) -> UsageCost:
     if bare in COST_TABLE and input_tokens is not None and output_tokens is not None:
         per_in, per_out = COST_TABLE[bare]
         estimated = (per_in * input_tokens + per_out * output_tokens) / Decimal(1_000_000)
+    counts_source = (
+        "provider_reported"
+        if input_tokens is not None or output_tokens is not None
+        else "unavailable"
+    )
     return UsageCost(
         provider=provider,
         model=bare,
@@ -165,7 +188,7 @@ def _usage_cost(alias, usage, *, attempts: int) -> UsageCost:
         output_tokens=output_tokens,
         estimated_cost=estimated,
         cost_table_version=COST_TABLE_VERSION,
-        counts_source="provider_reported",
+        counts_source=counts_source,
         validation_attempts=attempts,
     )
 

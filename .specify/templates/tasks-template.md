@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Per constitution Principle VI (Contracts Are the Product), conformance tests over the workflow and run-record schemas are MANDATORY and written before or alongside implementation. Other tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: The examples below include test tasks. Per constitution Principle VI (Contracts Are the Product), conformance tests over the workflow and run-record schemas are MANDATORY and written before or alongside implementation. Other tests are OPTIONAL - only include them if explicitly requested in the feature specification. Per constitution v2.2.0 governance, every feature-exit task list MUST include a contracts-versus-implementation sweep: each promised field, validation, bound, and output line in contracts/specs checked against observed behavior.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -157,6 +157,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
+- [ ] TXXX Contracts-versus-implementation sweep: verify every promise in the feature's contracts/specs against observed code behavior; implement missing behavior or correct the contract in the same change set
 
 ---
 

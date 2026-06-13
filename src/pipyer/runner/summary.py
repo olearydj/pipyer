@@ -83,8 +83,8 @@ def derive_summary(event_log_path: Path) -> str:
 
     add("## Steps")
     add("")
-    add("| Step | Component | Success | Failure | Skipped | Items |")
-    add("|------|-----------|---------|---------|---------|-------|")
+    add("| Step | Component | Success | Failure | Skipped | Items | Duration ms |")
+    add("|------|-----------|---------|---------|---------|-------|-------------|")
     step_order: list[str] = []
     by_step: dict[str, list[dict[str, Any]]] = {}
     for event in results:
@@ -98,13 +98,14 @@ def derive_summary(event_log_path: Path) -> str:
         for row in rows:
             counts[row["status"]] = counts.get(row["status"], 0) + 1
         items = item_counts.get(step, "-")
+        duration_ms = sum(int(row.get("duration_ms") or 0) for row in rows)
         add(
             f"| {step} | {rows[0]['component']} | {counts['success']} | "
-            f"{counts['failure']} | {counts['skipped']} | {items} |"
+            f"{counts['failure']} | {counts['skipped']} | {items} | {duration_ms} |"
         )
     for step, count in item_counts.items():
         if count == 0:
-            add(f"| {step} | - | 0 | 0 | 0 | 0 |")
+            add(f"| {step} | - | 0 | 0 | 0 | 0 | 0 |")
     add("")
 
     cost_rows = [e for e in results if e.get("usage")]

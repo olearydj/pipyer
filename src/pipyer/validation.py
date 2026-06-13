@@ -7,6 +7,7 @@ the offending element by location path, in document order, deterministically.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -270,6 +271,22 @@ def validate_workflow(workflow: Workflow, base_dir: Path | None = None) -> list[
                         message=f"script file not found: {config.script}",
                     )
                 )
+
+        # Rule 6b: assertion regexes are static config and can fail at dry-run.
+        if isinstance(config, AssertionsConfig):
+            for check_index, check in enumerate(config.checks):
+                if check.op != "matches" or not isinstance(check.expected, str):
+                    continue
+                try:
+                    re.compile(check.expected)
+                except re.error as error:
+                    add(
+                        Issue(
+                            loc=f"{loc_base}.config.checks[{check_index}].expected",
+                            code="invalid_regex",
+                            message=f"invalid regular expression: {error}",
+                        )
+                    )
 
         # Rules 5-6: llm/llm_judge alias existence and prompt coverage.
         if isinstance(config, LlmConfig | LlmJudgeConfig):

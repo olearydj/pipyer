@@ -103,3 +103,130 @@ def test_retried_success_unblocks_downstream(tmp_path):
             statuses[event["step"]] = event["status"]  # latest wins
     assert statuses["flaky"] == "success"
     assert statuses["consume"] == "success", "downstream stayed blocked behind a stale skip"
+
+
+def test_retried_each_expansion_clears_stale_scalar_skip(tmp_path):
+    results_dir = tmp_path / "runs"
+    flag = tmp_path / "flag"
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "collect.py").write_text(
+        textwrap.dedent(
+            """
+            import json, pathlib, sys
+            inputs = json.load(sys.stdin)
+            if not pathlib.Path(inputs["flag_file"]).exists():
+                raise SystemExit(1)
+            print(json.dumps({"items": [1, 2]}))
+            """
+        )
+    )
+    (tmp_path / "scripts" / "item.py").write_text(
+        "import json, sys\n"
+        "inputs = json.load(sys.stdin)\n"
+        "print(json.dumps({'value': inputs['x']}))\n"
+    )
+    (tmp_path / "scripts" / "consume.py").write_text(
+        textwrap.dedent(
+            """
+            import json, sys
+            rows = json.load(sys.stdin)["rows"]
+            if len(rows) != 2 or any(row is None for row in rows):
+                raise SystemExit(1)
+            print(json.dumps({"count": len(rows)}))
+            """
+        )
+    )
+    wf = tmp_path / "workflow.yaml"
+    wf.write_text(
+        textwrap.dedent(
+            f"""
+            schema_version: "2"
+            name: retry_each_skip
+            inputs:
+              flag_file:
+                type: path
+            settings:
+              results_dir: {json.dumps(str(results_dir))}
+            steps:
+              - name: collect
+                component: python
+                config:
+                  script: scripts/collect.py
+                inputs:
+                  flag_file: inputs.flag_file
+              - name: expand
+                component: python
+                each: steps.collect.output.items
+                config:
+                  script: scripts/item.py
+                inputs:
+                  x: item
+              - name: consume
+                component: python
+                config:
+                  script: scripts/consume.py
+                inputs:
+                  rows: steps.expand.output
+            outputs:
+              result: steps.consume.output
+            """
+        )
+    )
+
+    first = run_workflow(wf, inputs={"flag_file": str(flag)}, results_dir=results_dir)
+    assert first.record.totals["failed"] == 1
+    assert first.record.totals["skipped"] == 2
+
+    flag.write_text("present")
+    retried = run_workflow(
+        wf, inputs={"flag_file": str(flag)}, results_dir=results_dir, resume=True, retry_failed=True
+    )
+    statuses = {
+        (event["step"], event.get("item_index")): event["status"]
+        for event in retried.events
+        if event.get("event") == "step_result"
+    }
+    assert statuses[("expand", 0)] == "success"
+    assert statuses[("expand", 1)] == "success"
+    assert statuses[("consume", None)] == "success"
+
+
+def test_each_expansion_failure_carries_over_without_retry_failed(tmp_path):
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "item.py").write_text(
+        "import json, sys\nprint(json.dumps({'value': json.load(sys.stdin)['x']}))\n"
+    )
+    wf = tmp_path / "workflow.yaml"
+    wf.write_text(
+        textwrap.dedent(
+            """
+            schema_version: "2"
+            name: retry_each_failure
+            inputs:
+              items:
+                type: json
+            steps:
+              - name: expand
+                component: python
+                each: inputs.items
+                config:
+                  script: scripts/item.py
+                inputs:
+                  x: item
+            """
+        )
+    )
+    results_dir = tmp_path / "runs"
+
+    first = run_workflow(wf, inputs={"items": "not-a-list"}, results_dir=results_dir)
+    assert first.record.totals["failed"] == 1
+
+    carried = run_workflow(wf, inputs={"items": [1]}, results_dir=results_dir, resume=True)
+    assert carried.record.totals["failed"] == 1
+    boundary = next(event for event in carried.events if event.get("event") == "run_resumed")
+    after_boundary = carried.events[carried.events.index(boundary) :]
+    assert not [
+        event
+        for event in after_boundary
+        if event.get("event") == "step_result" and event.get("step") == "expand"
+    ]

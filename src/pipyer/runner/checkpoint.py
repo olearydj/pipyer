@@ -53,6 +53,9 @@ def build_checkpoint(
         elif kind == "step_result" and event.get("status") == "success":
             key = unit_key(event["step"], event.get("item_index"))
             completed[key] = CompletedEntry(input_hash=event["input_hash"], event_ref=str(index))
+        elif kind == "step_result":
+            key = unit_key(event["step"], event.get("item_index"))
+            completed.pop(key, None)
     return CheckpointSnapshot(
         schema_version=RECORD_SCHEMA_VERSION,
         run_id=run_id,

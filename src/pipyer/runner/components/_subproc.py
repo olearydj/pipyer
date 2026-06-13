@@ -27,6 +27,17 @@ from typing import IO
 # Explicit, boring bound (Principle V). Component outputs are JSON summaries;
 # anything near this size is pathological and the truncation flag says so.
 MAX_CAPTURE_BYTES = 1_048_576
+SECRET_ENV_KEYS = frozenset(
+    {
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "MISTRAL_API_KEY",
+        "CO_API_KEY",
+    }
+)
 
 _active_pgids: set[int] = set()
 _active_lock = threading.Lock()
@@ -86,6 +97,21 @@ def _drain(stream: IO[bytes], sink: list[bytes], truncated: list[bool]) -> None:
             truncated[0] = True  # keep reading so the child never blocks on a full pipe
 
 
+def _write_stdin(stream: IO[bytes], data: bytes, errors: list[BaseException]) -> None:
+    try:
+        stream.write(data)
+        stream.close()
+    except (BrokenPipeError, ValueError):
+        pass  # child exited or the timeout path closed the pipe
+    except OSError as error:
+        errors.append(error)
+
+
+def _scrub_env(env: dict[str, str] | None) -> dict[str, str]:
+    source = os.environ if env is None else env
+    return {key: value for key, value in source.items() if key not in SECRET_ENV_KEYS}
+
+
 def run_captured(
     argv: list[str],
     *,
@@ -100,7 +126,7 @@ def run_captured(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=str(cwd),
-        env=env,
+        env=_scrub_env(env),
         start_new_session=True,  # own process group: the kill boundary
     )
     pgid = proc.pid  # start_new_session makes the child its own group leader
@@ -118,13 +144,15 @@ def run_captured(
     ]
     for t in readers:
         t.start()
+    stdin_errors: list[BaseException] = []
+    writer = threading.Thread(
+        target=_write_stdin,
+        args=(proc.stdin, input_text.encode("utf-8"), stdin_errors),
+        daemon=True,
+    )
+    writer.start()
 
     try:
-        try:
-            proc.stdin.write(input_text.encode("utf-8"))
-            proc.stdin.close()
-        except BrokenPipeError:
-            pass  # child exited before reading stdin; its exit code will say why
         try:
             exit_code = proc.wait(timeout=timeout_s)
         except subprocess.TimeoutExpired:
@@ -138,8 +166,16 @@ def run_captured(
         _killpg(pgid)
         with _active_lock:
             _active_pgids.discard(pgid)
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
+        writer.join(timeout=5)
         for t in readers:
             t.join(timeout=5)
+
+    if stdin_errors:
+        raise stdin_errors[0]
 
     return CompletedCapture(
         exit_code=exit_code,

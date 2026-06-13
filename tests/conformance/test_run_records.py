@@ -140,6 +140,24 @@ def test_estimated_counts_without_cost_table_local_model_case():
     assert record.usage is not None and record.usage.estimated_cost is None
 
 
+def test_unavailable_counts_source_is_valid_for_failure_attempt_metadata():
+    record = result(
+        component="llm",
+        status="failure",
+        error=StepError(category="output_validation_error", message="invalid output"),
+        usage=usage(
+            input_tokens=None,
+            output_tokens=None,
+            estimated_cost=None,
+            counts_source="unavailable",
+            validation_attempts=3,
+        ),
+    )
+    assert record.usage is not None
+    assert record.usage.counts_source == "unavailable"
+    assert record.usage.validation_attempts == 3
+
+
 def test_estimated_cost_serializes_as_string_form_decimal_never_float():
     record = result(component="llm", usage=usage())
     dumped = record.model_dump(mode="json")

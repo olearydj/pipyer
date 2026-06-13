@@ -28,7 +28,7 @@ def check_add_behavior(source: str, name: str) -> dict:
         cases = [((1, 2), 3), ((-1, 1), 0), ((0, 0), 0)]
         failures = [f"add{args!r} != {want}" for args, want in cases if add(*args) != want]
         return {"name": "add_behavior", "passed": not failures, "detail": failures or None}
-    except Exception as error:  # missing function, runtime error, ...
+    except BaseException as error:  # missing function, runtime error, sys.exit, ...
         return {"name": "add_behavior", "passed": False, "detail": repr(error)}
 
 

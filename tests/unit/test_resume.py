@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from pipyer.runner import NoPriorRunError, run_workflow
+from pipyer.runner.checkpoint import build_checkpoint
 from pipyer.runner.resume import load_resume_plan
 
 GRADEBOT = Path(__file__).resolve().parents[1] / "fixtures" / "gradebot" / "workflow.yaml"
@@ -100,6 +101,32 @@ def test_checkpoint_log_mismatch_refuses_to_resume(tmp_path):
     run.checkpoint_path.write_text(json.dumps(checkpoint))
     with pytest.raises(RuntimeError, match="checkpoint/log mismatch"):
         load_resume_plan(tmp_path, run_id=None, retry_failed=False)
+
+
+def test_checkpoint_latest_failure_removes_stale_completion():
+    checkpoint = build_checkpoint(
+        [
+            {
+                "event": "run_started",
+                "run_id": "r1",
+                "workflow_hash": "sha256:wf",
+                "config_snapshot": {"config_hash": "sha256:cfg"},
+            },
+            {
+                "event": "step_result",
+                "step": "a",
+                "status": "success",
+                "input_hash": "sha256:old",
+            },
+            {
+                "event": "step_result",
+                "step": "a",
+                "status": "failure",
+                "input_hash": "sha256:new",
+            },
+        ]
+    )
+    assert checkpoint.completed == {}
 
 
 def test_corrupt_trailing_line_is_recovered_on_resume(tmp_path):

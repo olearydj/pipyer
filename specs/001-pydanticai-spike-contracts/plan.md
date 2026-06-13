@@ -34,7 +34,7 @@ Technical approach in one line: the contract modules (`schema/`, `records/`, `ca
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Gates derived from `.specify/memory/constitution.md` v2.0.0:
+Gates derived from `.specify/memory/constitution.md` v2.2.0:
 
 - [x] Directing, not delegating (I): no autonomous control flow, agent-selected steps, or runtime workflow rewriting introduced. The schema cannot express any of them; the spike's graph review (FR-007) explicitly evaluates whether graph primitives would compromise this.
 - [x] Deterministic topology (II): step graph and reference resolution are functions of the workflow file alone; `each` fan-out of workflow plus input data; nothing of model output. Uniformity across items is guaranteed by construction (FR-013: no per-item variation mechanism exists in the schema).
@@ -43,7 +43,8 @@ Gates derived from `.specify/memory/constitution.md` v2.0.0:
 - [x] Boring infrastructure (V): no implicit behavior, magic defaults, or hidden state; SPEC section 6 semantics are encoded in the schemas and conformance fixtures, not reinterpreted. Resolution R5 (resume reruns emerge from hash semantics, no special-case flag) is this principle applied.
 - [x] Contracts are the product (VI): the schemas land with their conformance tests in the same change set (FR-017); execution-behavior fixtures are authored before the runner exists.
 - [x] Build by extraction (VII): every deliverable traces to the three named consumers; the GradeBot fixture is consumer one's workflow verbatim; the six open decisions are resolved against consumer needs, not speculation (research.md R1-R6).
-- [x] Operational constraints: Python 3.12+, Pydantic v2, `uv` only; secrets via environment variables; local-first; the ADR-003 spike is sequenced as the entry gate (001a before 001b); wrapper drift guarded by a permanent import boundary on the contract modules (substrate confined to `spike/` in this feature; the contract modules are substrate-free forever, R10).
+- [x] Operational constraints: Python 3.12+, Pydantic v2, `uv` only; secrets via the R14 1Password chain with env fallback; local-first; the ADR-003 spike is sequenced as the entry gate (001a before 001b); wrapper drift guarded by a permanent import boundary on the contract modules (substrate confined to `spike/` in this feature; the contract modules are substrate-free forever, R10).
+- [x] Contracts-versus-implementation sweep: contract promises are mechanically checked against implementation behavior before feature exit; drift is fixed in code or corrected in the contract.
 
 **Post-design re-check (after Phase 1)**: PASS. The data model introduces no per-item variation surface, no expression types, no substrate imports in contract entities; the CLI contract validates and never executes; the checkpoint decision (R6) keeps the event log authoritative, preserving the durability hierarchy.
 

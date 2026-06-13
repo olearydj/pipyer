@@ -30,7 +30,8 @@ roadmap). The twc-bridge composition pass is Feature 004.
 - The Feature 001/002 contracts and runner semantics are frozen ground: content-hash resume,
   R2 skip policy, R25 no-automatic-in-run-retries (with its named exception below), failure
   budgets, the event log as authority, `summary_*` output convention, R14 secrets, R23 test
-  hooks. The 002 conformance suite (184 tests) stays green throughout.
+  hooks. The 002 conformance suite (208 tests as of the 2026-06-13 audit
+  follow-up) stays green throughout.
 - Comparison-machinery lineage: 002's FR-021 deliberately kept *domain* comparison (grades
   vs historical baselines) in workflow steps. That boundary stands. What enters the product
   now is *run-to-run* comparison: same workflow, different runs or cells, compared on the

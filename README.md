@@ -6,7 +6,7 @@ Status: Features 001 and 002 complete (2026-06-12). The contracts exist as code,
 
 ## Orientation
 
-- Constitution: `.specify/memory/constitution.md` (v2.1.0) - binds all features.
+- Constitution: `.specify/memory/constitution.md` (v2.2.0) - binds all features.
 - Sprint 01 source material: `docs/sprint-01/` (base spec, feature backlog, spike plan); full record in `specs/001-pydanticai-spike-contracts/` (spike report, exit notes, plan, research R1-R14).
 - Sprint 02 source material: `docs/sprint-02/BRIEF.md` - feeds `/speckit.specify` for Feature 002.
 - Process: spec-driven with [spec-kit](https://github.com/github/spec-kit); each phase output gets a cross-session review; gates are never self-graded.

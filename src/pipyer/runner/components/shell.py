@@ -44,10 +44,12 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]
             detail={"command": step.config.command},
         ) from error
     stdout: Any = proc.stdout
+    json_error: json.JSONDecodeError | None = None
     if step.config.parse_stdout == "json":
         try:
             stdout = json.loads(proc.stdout) if proc.stdout.strip() else None
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as error:
+            json_error = error
             stdout = proc.stdout  # keep raw text; a nonzero exit will say why
     if proc.exit_code != 0:
         raise StepFailure(
@@ -60,6 +62,12 @@ def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> dict[str, Any]
                 "stdout_truncated": proc.stdout_truncated,
                 "stderr_truncated": proc.stderr_truncated,
             },
+        )
+    if json_error is not None:
+        raise StepFailure(
+            ErrorCategory.OUTPUT_VALIDATION_ERROR,
+            "command stdout is not valid JSON",
+            detail={"stdout": proc.stdout[-2000:], "stdout_truncated": proc.stdout_truncated},
         )
     return {
         "stdout": stdout,

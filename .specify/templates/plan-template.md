@@ -40,7 +40,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Gates derived from `.specify/memory/constitution.md` v2.0.0:
+Gates derived from `.specify/memory/constitution.md` v2.2.0:
 
 - [ ] Directing, not delegating (I): no autonomous control flow, agent-selected steps, or
   runtime workflow rewriting introduced.
@@ -59,8 +59,14 @@ Gates derived from `.specify/memory/constitution.md` v2.0.0:
   change set.
 - [ ] Build by extraction (VII): every feature traces to a named consumer (DEMA-LLM, GradeBot,
   twc-bridge); no speculative generality.
-- [ ] Operational constraints: Python 3.12+, Pydantic v2, PydanticAI, `uv` only; secrets via
-  environment variables; local-first.
+- [ ] Operational constraints: Python 3.12+, Pydantic v2, PydanticAI, `uv` only;
+  build backend `uv_build`; CLIs use typer; formatting/linting use `ruff`; type
+  checking uses `ty`; secrets via the R14 1Password chain (`op read` with env
+  fallback, provider chain `auto`/`1password`/`env`); local-first.
+- [ ] Contracts-versus-implementation sweep (Governance): feature exit includes a
+  promise-by-promise pass over contracts/specs against observed code behavior;
+  every promised field, validation, bound, and output line is either implemented
+  with evidence or explicitly corrected in the contracts.
 
 ## Project Structure
 

@@ -49,6 +49,19 @@ def test_unreadable_lock_treated_as_stale(tmp_path):
         log.release()
 
 
+def test_stale_lock_reclaim_race_reports_run_locked(tmp_path, monkeypatch):
+    (tmp_path / "events.jsonl.lock").write_text(
+        json.dumps({"pid": 2**22 + 45678, "started_at": "2026-01-01T00:00:00+00:00"})
+    )
+
+    def another_writer_wins(log):
+        log.lock_path.write_text(json.dumps({"pid": os.getpid(), "started_at": "now"}))
+
+    monkeypatch.setattr(EventLog, "_handle_existing_lock", another_writer_wins)
+    with pytest.raises(RunLockedError, match="another writer"):
+        EventLog(tmp_path).acquire()
+
+
 def test_clean_release_removes_lock(tmp_path):
     log = EventLog(tmp_path)
     log.acquire()

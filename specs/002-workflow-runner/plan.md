@@ -34,7 +34,7 @@ The runner API is already pinned by the 8 skip-marked fixtures in `tests/conform
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Gates derived from `.specify/memory/constitution.md` v2.1.0:
+Gates derived from `.specify/memory/constitution.md` v2.2.0:
 
 - [x] Directing, not delegating (I): the runner executes the fixed topology; no step selection, no runtime rewriting. The only control flow the runner owns is the decided semantics: skip-on-upstream-failure, budget halt, resume skip - all recorded, none model-driven.
 - [x] Deterministic topology (II): step graph from the workflow file alone; `each` fan-out from workflow plus input data; model output never influences which steps run. Items processed uniformly with per-item `StepResult` evidence (the empty-each and duplicate-item fixtures pin this).
@@ -105,7 +105,7 @@ tests/
 ├── conformance/
 │   ├── execution/       # 8 fixtures: skip markers removed, bodies untouched
 │   ├── test_import_boundary.py  # unchanged, must stay green
-│   ├── test_secrets.py  # NEW - R14 chain conformance (env-only paths; op mocked)
+│   ├── test_secrets.py  # NEW - R14 chain conformance (env fallback; op mocked)
 │   ├── test_run_cli.py  # NEW - pipyer run contract
 │   └── test_schema_additions.py # NEW - output_mode + timeout_s conformance (VI)
 ├── unit/                # NEW - runner internals (lock, hashing, summary sections)

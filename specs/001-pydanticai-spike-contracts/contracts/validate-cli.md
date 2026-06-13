@@ -24,7 +24,7 @@ pipyer validate <workflow-file> [--json]
 Valid workflow (exit 0):
 
 ```text
-OK <workflow-name> (schema v1, hash sha256:ab12…)
+OK <workflow-name> (schema v2, hash sha256:ab12…)
 ```
 
 Invalid workflow (exit 1), human format - every error names its location:
@@ -42,7 +42,7 @@ Invalid workflow with `--json` (exit 1):
 {
   "valid": false,
   "workflow": "gradebot",
-  "schema_version": "1",
+  "schema_version": "2",
   "errors": [
     {"loc": "steps[1].inputs.test_output", "code": "unknown_step_ref", "message": "reference to unknown step 'run_test'"}
   ]

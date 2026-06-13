@@ -9,6 +9,7 @@ recorded event; no automatic in-run retries (R25) - recovery is resume.
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import subprocess
 import traceback
 from dataclasses import dataclass, field
@@ -44,6 +45,7 @@ from pipyer.runner.context import (
 from pipyer.runner.events import EventLog
 from pipyer.runner.resume import ResumePlan, load_resume_plan
 from pipyer.runner.summary import derive_summary
+from pipyer.schema.refs import Kind, classify
 from pipyer.schema.workflow import Settings, Workflow
 from pipyer.secrets import resolve_secret
 from pipyer.validation import Issue, validate_file
@@ -117,9 +119,9 @@ def _resolve_run_inputs(workflow: Workflow, provided: dict[str, Any]) -> dict[st
     resolved: dict[str, Any] = {}
     for name, decl in workflow.inputs.items():
         if name in provided:
-            resolved[name] = provided[name]
+            value = provided[name]
         elif not decl.required:
-            resolved[name] = decl.default
+            value = decl.default
         else:
             issues.append(
                 Issue(
@@ -128,6 +130,16 @@ def _resolve_run_inputs(workflow: Workflow, provided: dict[str, Any]) -> dict[st
                     message="required input not provided",
                 )
             )
+            continue
+        if value is not None and not _input_matches_decl(value, decl.type):
+            issues.append(
+                Issue(
+                    loc=f"inputs.{name}",
+                    code="input_type_mismatch",
+                    message=f"expected input type {decl.type!r}, got {type(value).__name__}",
+                )
+            )
+        resolved[name] = value
     for name in provided:
         if name not in workflow.inputs:
             issues.append(
@@ -140,6 +152,51 @@ def _resolve_run_inputs(workflow: Workflow, provided: dict[str, Any]) -> dict[st
     if issues:
         raise ValidationFailure(issues)
     return resolved
+
+
+def _input_matches_decl(value: Any, declared_type: str) -> bool:
+    if declared_type in ("string", "path"):
+        return isinstance(value, str)
+    if declared_type == "number":
+        return isinstance(value, int | float) and not isinstance(value, bool)
+    if declared_type == "boolean":
+        return isinstance(value, bool)
+    if declared_type == "json":
+        try:
+            json.dumps(value)
+        except TypeError:
+            return False
+        return True
+    return True
+
+
+def _runtime_unsupported_issues(workflow: Workflow) -> list[Issue]:
+    issues: list[Issue] = []
+    if workflow.matrix:
+        issues.append(
+            Issue(
+                loc="matrix",
+                code="unsupported_runtime_feature",
+                message=(
+                    "matrix execution is not implemented yet; `pipyer run` rejects "
+                    "declared matrix dimensions until Feature 003"
+                ),
+            )
+        )
+    for alias_name, alias in workflow.models.items():
+        kind, _ref = classify(alias.model)
+        if kind is Kind.REF:
+            issues.append(
+                Issue(
+                    loc=f"models.{alias_name}.model",
+                    code="unsupported_runtime_feature",
+                    message=(
+                        "alias model references are validation-only until Feature 003; "
+                        "`pipyer run` requires a concrete model identifier"
+                    ),
+                )
+            )
+    return issues
 
 
 def _preflight_secrets(
@@ -194,6 +251,9 @@ def run_workflow(
     effective_settings = Settings.model_validate(
         {**workflow.settings.model_dump(), **(settings or {})}
     )
+    unsupported = _runtime_unsupported_issues(workflow)
+    if unsupported:
+        raise ValidationFailure(unsupported)
     secret_providers = _preflight_secrets(workflow, model_overrides)
 
     resume_plan: ResumePlan | None = None
@@ -253,6 +313,9 @@ class _Engine:
         self.prior_completed = resume_plan.completed if resume_plan else {}
         self.retry_units = resume_plan.retry_units if resume_plan else set()
         self.prior_attempts = resume_plan.attempts if resume_plan else {}
+        self.attempted_units: list[str] = []
+        self.failed_units: list[str] = []
+        self.not_attempted_units: list[str] = []
 
     # ------------------------------------------------------------------ events
 
@@ -325,6 +388,12 @@ class _Engine:
                         schema_version=RECORD_SCHEMA_VERSION,
                         run_id=ctx.run_id,
                         reason=self.halt_reason,
+                        attempted=self.totals.attempted,
+                        failed=self.totals.failed,
+                        not_attempted=getattr(self, "totals_not_attempted", 0),
+                        attempted_units=self.attempted_units,
+                        failed_units=self.failed_units,
+                        not_attempted_units=self.not_attempted_units,
                         at=self._now(),
                     )
                 )
@@ -418,6 +487,15 @@ class _Engine:
         if step.each is None:
             self._run_unit(step, None)
             return
+        scalar_key = unit_key(step.name, None)
+        if (
+            self.resume_plan is not None
+            and scalar_key in self.resume_plan.failed_units
+            and scalar_key not in self.retry_units
+            and scalar_key not in self.prior_completed
+        ):
+            self._finish_unit(step, None, ("failed_carryover", scalar_key, self._now()))
+            return
 
         try:
             collection = ctx.resolve(step.each, index=None, each_ref=None)
@@ -427,9 +505,43 @@ class _Engine:
                 step, None, ("skip", unit_key(step.name, None), started, failure.upstream_key, {})
             )
             return
+        except Exception as error:  # noqa: BLE001 - runtime data failures are recorded
+            started = self._now()
+            self._finish_unit(
+                step,
+                None,
+                self._unclassified_failure_outcome(
+                    step,
+                    None,
+                    started,
+                    error,
+                    input_refs={"each": step.each or ""},
+                    phase="each expansion",
+                ),
+            )
+            return
         if not isinstance(collection, list):
-            collection = list(collection or [])
+            started = self._now()
+            self._finish_unit(
+                step,
+                None,
+                self._unclassified_failure_outcome(
+                    step,
+                    None,
+                    started,
+                    TypeError(
+                        f"`each` target {step.each!r} resolved to "
+                        f"{type(collection).__name__}, expected list"
+                    ),
+                    input_refs={"each": step.each or ""},
+                    phase="each expansion",
+                ),
+            )
+            return
         state.item_count = len(collection)
+        state.failed.discard(scalar_key)
+        state.skipped.discard(scalar_key)
+        state.projections.pop(scalar_key, None)
         self._emit(
             EachExpandedEvent(
                 schema_version=RECORD_SCHEMA_VERSION,
@@ -485,6 +597,15 @@ class _Engine:
                                 interrupted = stop
                     if self.halt_reason is not None or interrupted:
                         break
+            except KeyboardInterrupt:
+                interrupted = _Interrupted()
+                kill_active_children()
+                for future in concurrent.futures.as_completed(list(pending)):
+                    index = pending.pop(future)
+                    try:
+                        self._finish_unit(step, index, future.result())
+                    except _Interrupted:
+                        pass
             finally:
                 remaining = list(indices)
                 if remaining and (self.halt_reason is not None or interrupted):
@@ -496,7 +617,9 @@ class _Engine:
         # Recorded inside the halt reason/totals; not_attempted units have no
         # StepResult by definition - they were never started, and the halt
         # event plus totals account for them.
-        self.totals_not_attempted = getattr(self, "totals_not_attempted", 0) + len(list(indices))
+        keys = [unit_key(step.name, index) for index in indices]
+        self.not_attempted_units.extend(keys)
+        self.totals_not_attempted = getattr(self, "totals_not_attempted", 0) + len(keys)
 
     # ------------------------------------------------------------------- units
 
@@ -520,6 +643,16 @@ class _Engine:
                 resolved[name] = ctx.resolve(value, index=index, each_ref=step.each)
         except UpstreamFailure as failure:
             return ("skip", key, started, failure.upstream_key, input_refs)
+        except Exception as error:  # noqa: BLE001 - runtime data failures are recorded
+            return self._unclassified_failure_outcome(
+                step,
+                index,
+                started,
+                error,
+                input_refs=input_refs,
+                resolved=resolved,
+                phase="input resolution",
+            )
 
         config = step.config.model_dump(mode="json")
         # Resolved config refs (e.g. a file path of "item.path" or
@@ -533,6 +666,17 @@ class _Engine:
                 )
             except UpstreamFailure as failure:
                 return ("skip", key, started, failure.upstream_key, input_refs)
+            except Exception as error:  # noqa: BLE001 - runtime data failures are recorded
+                return self._unclassified_failure_outcome(
+                    step,
+                    index,
+                    started,
+                    error,
+                    input_refs=input_refs,
+                    resolved=resolved,
+                    config=config,
+                    phase="config resolution",
+                )
         input_hash = ctx.unit_input_hash(step.name, _hashable(resolved), _hashable(config))
 
         prior = self.prior_completed.get(key)
@@ -571,6 +715,43 @@ class _Engine:
         else:
             projection, usage = outcome, None
         return ("success", key, started, projection, usage, input_hash, input_refs)
+
+    def _unclassified_failure_outcome(
+        self,
+        step,
+        index: int | None,
+        started,
+        error: Exception,
+        *,
+        input_refs: dict[str, str],
+        resolved: dict[str, Any] | None = None,
+        config: dict[str, Any] | None = None,
+        phase: str,
+    ):
+        key = unit_key(step.name, index)
+        failure = StepFailure(
+            ErrorCategory.UNCLASSIFIED,
+            f"{phase} failed: {type(error).__name__}: {error}",
+            detail={
+                "phase": phase,
+                "traceback": "".join(
+                    traceback.format_exception(type(error), error, error.__traceback__)
+                )[-2000:],
+            },
+        )
+        fingerprint = {
+            "phase": phase,
+            "partial_inputs": resolved or {},
+            "error_type": type(error).__name__,
+            "error": str(error),
+        }
+        hash_config = config or step.config.model_dump(mode="json")
+        input_hash = self.ctx.unit_input_hash(
+            step.name,
+            _hashable(fingerprint),
+            _hashable(hash_config),
+        )
+        return ("failure", key, started, failure, input_hash, input_refs)
 
     def _finish_unit(self, step, index: int | None, outcome) -> None:
         ctx = self.ctx
@@ -637,6 +818,8 @@ class _Engine:
             state.skipped.discard(key)
             self.totals.failed += 1
             self.totals.attempted += 1
+            self.attempted_units.append(key)
+            self.failed_units.append(key)
             self.totals.add_usage(failure.usage)
             self.failure_count += 1
             if key in self.prior_completed:
@@ -665,6 +848,7 @@ class _Engine:
         state.skipped.discard(key)
         self.totals.succeeded += 1
         self.totals.attempted += 1
+        self.attempted_units.append(key)
         self.totals.add_usage(usage)
         if key in self.prior_completed:
             self.totals.recomputed.append(key)

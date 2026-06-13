@@ -11,7 +11,7 @@ The authoring-side contract. Full field definitions live in [data-model.md](../d
 5. Prompts are external files with named placeholders; the step input map binds all placeholders, and binds nothing else (unbound and unused are both errors).
 6. Uniformity by construction: no schema mechanism varies steps, prompts, or configuration per item within a batch (FR-013).
 7. Self-identification: every workflow declares `schema_version`; unsupported versions are validation errors, not best-effort parses.
-8. No credential surface: no schema field holds a secret; provider keys are environment-only.
+8. No credential surface: no schema field holds a secret; provider keys resolve outside workflow data via the R14 provider chain and never serialize into workflows or run records.
 
 ## Canonical serialization
 
