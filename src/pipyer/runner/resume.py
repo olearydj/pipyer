@@ -14,7 +14,7 @@ from typing import Any
 
 from pipyer.records.run import RunResumedEvent, parse_event_log
 from pipyer.runner.checkpoint import build_checkpoint
-from pipyer.runner.context import unit_key
+from pipyer.runner.context import event_unit_key
 
 
 class NoPriorRunError(RuntimeError):
@@ -39,7 +39,7 @@ class ResumePlan:
                 self.prior_status = event.get("status", "interrupted")
             if kind != "step_result":
                 continue
-            key = unit_key(event["step"], event.get("item_index"))
+            key = event_unit_key(event)
             self.attempts[key] = max(self.attempts.get(key, 0), event.get("attempt", 1))
             if event.get("status") == "success":
                 self.completed[key] = event["input_hash"]

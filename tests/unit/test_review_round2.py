@@ -252,7 +252,7 @@ def test_cli_unknown_estimated_cost_prints_na(tmp_path):
     assert "cost: $0" not in result.output
 
 
-def test_run_rejects_matrix_execution_until_feature_003(tmp_path):
+def test_matrix_execution_attaches_cell_context(tmp_path):
     wf = _minimal(
         tmp_path,
         textwrap.dedent(
@@ -276,16 +276,15 @@ def test_run_rejects_matrix_execution_until_feature_003(tmp_path):
         ).replace("\n", "\n            "),
     )
     assert validate_file(wf)[1] == []
-    try:
-        run_workflow(wf, results_dir=tmp_path / "runs")
-    except ValidationFailure as error:
-        assert error.issues[0].code == "unsupported_runtime_feature"
-        assert error.issues[0].loc == "matrix"
-    else:  # pragma: no cover - assertion clarity
-        raise AssertionError("matrix workflow ran instead of failing loudly")
+    run = run_workflow(wf, results_dir=tmp_path / "runs")
+    cell_events = [e for e in run.events if e.get("event") == "cell_started"]
+    results = [e for e in run.events if e.get("event") == "step_result"]
+    assert [e["cell_index"] for e in cell_events] == [0]
+    assert results[0]["cell_index"] == 0
+    assert results[0]["matrix"] == {"grader_model": "test"}
 
 
-def test_run_rejects_alias_ref_execution_until_feature_003(tmp_path):
+def test_alias_ref_model_execution_resolves_at_runtime(tmp_path):
     (tmp_path / "prompt.md").write_text("{x}")
     wf = _minimal(
         tmp_path,
@@ -320,13 +319,10 @@ def test_run_rejects_alias_ref_execution_until_feature_003(tmp_path):
         ).replace("\n", "\n            "),
     )
     assert validate_file(wf)[1] == []
-    try:
-        run_workflow(wf, results_dir=tmp_path / "runs")
-    except ValidationFailure as error:
-        assert error.issues[0].loc == "models.grader.model"
-        assert error.issues[0].code == "unsupported_runtime_feature"
-    else:  # pragma: no cover - assertion clarity
-        raise AssertionError("alias-ref workflow ran instead of failing loudly")
+    run = run_workflow(wf, results_dir=tmp_path / "runs")
+    result = next(e for e in run.events if e.get("event") == "step_result")
+    assert result["status"] == "success"
+    assert result["usage"]["model"] == "test"
 
 
 def test_python_subprocess_does_not_inherit_llm_api_keys(tmp_path, monkeypatch):

@@ -84,6 +84,8 @@ class EachExpandedEvent(_Model):
     schema_version: str
     run_id: str
     step: str
+    cell_index: int | None = Field(default=None, ge=0)
+    matrix: dict[str, Any] | None = None
     item_count: int = Field(ge=0)
     at: datetime
 
@@ -108,6 +110,31 @@ class RunResumedEvent(_Model):
     failed_not_retried: list[str] = Field(default_factory=list)
     failed_retried: list[str] = Field(default_factory=list)
     lock_reclaimed: bool = False
+    at: datetime
+
+
+class CellStartedEvent(_Model):
+    event: Literal["cell_started"] = "cell_started"
+    schema_version: str
+    run_id: str
+    cell_index: int = Field(ge=0)
+    matrix: dict[str, Any]
+    at: datetime
+
+
+class CellHaltedEvent(_Model):
+    event: Literal["cell_halted"] = "cell_halted"
+    schema_version: str
+    run_id: str
+    cell_index: int = Field(ge=0)
+    matrix: dict[str, Any]
+    reason: str
+    attempted: int = 0
+    failed: int = 0
+    not_attempted: int = 0
+    attempted_units: list[str] = Field(default_factory=list)
+    failed_units: list[str] = Field(default_factory=list)
+    not_attempted_units: list[str] = Field(default_factory=list)
     at: datetime
 
 
@@ -139,6 +166,8 @@ Event = (
     | StepResultEvent
     | EachExpandedEvent
     | RunResumedEvent
+    | CellStartedEvent
+    | CellHaltedEvent
     | RunHaltedEvent
     | RunFinishedEvent
 )

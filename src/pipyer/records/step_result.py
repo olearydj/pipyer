@@ -77,6 +77,7 @@ class StepResult(_Model):
     finished_at: datetime
     duration_ms: int = Field(ge=0)
     usage: UsageCost | None = None
+    cell_index: int | None = Field(default=None, ge=0)
     matrix: dict[str, Any] | None = None
     item_index: int | None = Field(default=None, ge=0)
     entity_id: str | None = None

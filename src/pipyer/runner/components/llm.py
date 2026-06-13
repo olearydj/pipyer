@@ -205,7 +205,7 @@ def _load_schema(config, ctx) -> dict[str, Any]:
 
 def execute(step, resolved_inputs: dict[str, Any], ctx, index) -> tuple[dict[str, Any], UsageCost]:
     config = step.config
-    alias = ctx.workflow.models[config.model]
+    alias = ctx.model_alias(config.model)
     schema = _load_schema(config, ctx)
     hooks = getattr(ctx, "test_hooks", {})
     model = _build_model(

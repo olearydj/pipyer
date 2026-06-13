@@ -10,6 +10,7 @@ the work whose meaning is unchanged.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import re
 from dataclasses import dataclass, field
@@ -21,11 +22,18 @@ from pipyer.canonical import workflow_hash
 from pipyer.schema.refs import Ref, parse
 from pipyer.schema.workflow import Settings, Workflow
 
-UNIT_KEY_RE = re.compile(r"^(?P<step>[a-z][a-z0-9_]*)(?:\[(?P<index>\d+)\])?$")
+UNIT_KEY_RE = re.compile(
+    r"^(?:cell\[(?P<cell>\d+)\]/)?(?P<step>[a-z][a-z0-9_]*)(?:\[(?P<index>\d+)\])?$"
+)
 
 
-def unit_key(step: str, index: int | None) -> str:
-    return step if index is None else f"{step}[{index}]"
+def unit_key(step: str, index: int | None, cell_index: int | None = None) -> str:
+    key = step if index is None else f"{step}[{index}]"
+    return key if cell_index is None else f"cell[{cell_index}]/{key}"
+
+
+def event_unit_key(event: dict[str, Any]) -> str:
+    return unit_key(event["step"], event.get("item_index"), event.get("cell_index"))
 
 
 def stable_hash(payload: Any) -> str:
@@ -44,6 +52,23 @@ def new_run_id(results_dir: Path, wf_hash: str, now: datetime | None = None) -> 
         n += 1
         candidate = f"{base}-{n}"
     return candidate
+
+
+@dataclass(frozen=True)
+class MatrixCell:
+    index: int
+    params: dict[str, Any]
+
+
+def expand_matrix(matrix: dict[str, list[Any]]) -> list[MatrixCell]:
+    """Deterministic cells: dimension names sorted, values in declared order."""
+    if not matrix:
+        return []
+    names = sorted(matrix)
+    return [
+        MatrixCell(index=i, params=dict(zip(names, values, strict=True)))
+        for i, values in enumerate(itertools.product(*(matrix[name] for name in names)))
+    ]
 
 
 class ResolutionError(RuntimeError):
@@ -88,6 +113,8 @@ class RunContext:
         run_dir: Path,
         run_id: str,
         secret_providers: dict[str, str],
+        cell_index: int | None = None,
+        matrix_params: dict[str, Any] | None = None,
     ) -> None:
         self.workflow = workflow
         self.workflow_hash = workflow_hash(workflow)
@@ -97,6 +124,8 @@ class RunContext:
         self.run_dir = run_dir
         self.run_id = run_id
         self.secret_providers = secret_providers  # alias -> provider name, never values
+        self.cell_index = cell_index
+        self.matrix_params = dict(matrix_params or {})
         self.steps: dict[str, StepState] = {}
         self.step_each: dict[str, str | None] = {s.name: s.each for s in workflow.steps}
         self.test_hooks: dict[str, Any] = {}
@@ -108,6 +137,10 @@ class RunContext:
             "inputs": self.inputs,
             "settings": self.settings.model_dump(mode="json"),
             "matrix": self.workflow.matrix,
+            "matrix_cells": [
+                {"cell_index": cell.index, "matrix": cell.params}
+                for cell in expand_matrix(self.workflow.matrix)
+            ],
             "models": {
                 name: {
                     "model": alias.model,
@@ -143,6 +176,10 @@ class RunContext:
     def _resolve_ref(self, ref: Ref, *, index: int | None, each_ref: str | None) -> Any:
         if ref.root == "inputs":
             return _navigate(self.inputs[ref.segments[0]], ref.segments[1:], str(ref))
+        if ref.root == "matrix":
+            if not self.matrix_params:
+                raise ResolutionError(f"{ref}: matrix is not active")
+            return _navigate(self.matrix_params[ref.segments[0]], ref.segments[1:], str(ref))
         if ref.root == "item":
             assert index is not None, "item reference outside an each unit"
             item = self._aligned_collection(each_ref)[index]
@@ -150,7 +187,7 @@ class RunContext:
         if ref.root == "index":
             return index
         if ref.root == "models":
-            alias = self.workflow.models[ref.segments[0]]
+            alias = self.model_alias(ref.segments[0])
             return _navigate(alias.model_dump(mode="json"), ref.segments[1:], str(ref))
         if ref.root == "steps":
             return self._resolve_step_ref(ref, index=index)
@@ -169,16 +206,16 @@ class RunContext:
         if state is None:
             raise ResolutionError(f"reference to step {step_name!r} before it ran ({ref})")
         if not state.each:
-            key = unit_key(step_name, None)
+            key = unit_key(step_name, None, self.cell_index)
             if key in state.failed or key in state.skipped:
                 raise UpstreamFailure(key)
             return _navigate(state.projections[key], rest, str(ref))
-        scalar_key = unit_key(step_name, None)
+        scalar_key = unit_key(step_name, None, self.cell_index)
         if scalar_key in state.failed or scalar_key in state.skipped:
             raise UpstreamFailure(scalar_key)
         if index is not None:
             # Aligned access from inside an each unit: same index, by position.
-            key = unit_key(step_name, index)
+            key = unit_key(step_name, index, self.cell_index)
             if key in state.failed or key in state.skipped:
                 raise UpstreamFailure(key)
             if key not in state.projections:
@@ -188,7 +225,7 @@ class RunContext:
         # the item failed or was skipped (downstream code sees the gap explicitly).
         items: list[Any] = []
         for i in range(state.item_count or 0):
-            key = unit_key(step_name, i)
+            key = unit_key(step_name, i, self.cell_index)
             if key in state.projections:
                 items.append(_navigate(state.projections[key], rest, str(ref), none_ok=True))
             else:
@@ -200,15 +237,36 @@ class RunContext:
         step_name: str,
         resolved_inputs: dict[str, Any],
         config: dict[str, Any],
+        *,
+        resource_digests: dict[str, Any] | None = None,
     ) -> str:
         return stable_hash(
             {
                 "workflow_hash": self.workflow_hash,
                 "step": step_name,
+                "cell_index": self.cell_index,
+                "matrix": self.matrix_params,
                 "inputs": resolved_inputs,
                 "config": config,
+                "resource_digests": resource_digests or {},
             }
         )
+
+    def unit_key(self, step: str, index: int | None) -> str:
+        return unit_key(step, index, self.cell_index)
+
+    def set_cell(self, cell: MatrixCell | None) -> None:
+        self.cell_index = None if cell is None else cell.index
+        self.matrix_params = {} if cell is None else dict(cell.params)
+
+    def model_alias(self, name: str):
+        from pipyer.schema.workflow import ModelAlias
+
+        alias = self.workflow.models[name]
+        model = self.resolve(alias.model, index=None, each_ref=None)
+        data = alias.model_dump(mode="json")
+        data["model"] = model
+        return ModelAlias.model_validate(data)
 
 
 def _navigate(value: Any, segments: tuple[str, ...], ref: str, *, none_ok: bool = False) -> Any:

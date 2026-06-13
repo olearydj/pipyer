@@ -25,6 +25,8 @@ def derive_summary(event_log_path: Path) -> str:
     resumed = [e for e in events if e.get("event") == "run_resumed"]
     results = [e for e in events if e.get("event") == "step_result"]
     expansions = [e for e in events if e.get("event") == "each_expanded"]
+    cells = [e for e in events if e.get("event") == "cell_started"]
+    cell_halts = [e for e in events if e.get("event") == "cell_halted"]
 
     run_id = (started or {}).get("run_id", "unknown")
     status = (finished or {}).get("status", "in progress" if not finished else "unknown")
@@ -79,6 +81,21 @@ def derive_summary(event_log_path: Path) -> str:
         add(f"- Units recomputed: {len(recomputed)}")
         if recomputed:
             add("  - " + ", ".join(recomputed))
+        add("")
+
+    if cells:
+        add("## Matrix Cells")
+        add("")
+        add("| Cell | Matrix | Status |")
+        add("|------|--------|--------|")
+        halted_by_cell = {e["cell_index"]: e for e in cell_halts}
+        for event in cells:
+            status_text = "halted" if event["cell_index"] in halted_by_cell else "completed"
+            add(
+                f"| cell[{event['cell_index']}] | "
+                f"{_cell(json.dumps(event.get('matrix') or {}, sort_keys=True))} | "
+                f"{status_text} |"
+            )
         add("")
 
     add("## Steps")
@@ -150,6 +167,34 @@ def derive_summary(event_log_path: Path) -> str:
         add(f"Total estimated cost: {str(total_cost) if any_cost else 'n/a'} USD")
         add("")
 
+        matrix_cost_rows = [e for e in cost_rows if e.get("matrix")]
+        if matrix_cost_rows:
+            add("### Matrix Cost")
+            add("")
+            add("| Dimension | Value | Calls | Input tok | Output tok | Est. cost (USD) |")
+            add("|-----------|-------|-------|-----------|------------|-----------------|")
+            by_dim: dict[tuple[str, str], dict[str, Any]] = {}
+            for event in matrix_cost_rows:
+                usage = event["usage"]
+                for dim, value in (event.get("matrix") or {}).items():
+                    slot = by_dim.setdefault(
+                        (dim, json.dumps(value, sort_keys=True, default=str)),
+                        {"calls": 0, "in": 0, "out": 0, "cost": Decimal(0), "any_cost": False},
+                    )
+                    slot["calls"] += 1
+                    slot["in"] += usage.get("input_tokens") or 0
+                    slot["out"] += usage.get("output_tokens") or 0
+                    if usage.get("estimated_cost") is not None:
+                        slot["cost"] += Decimal(str(usage["estimated_cost"]))
+                        slot["any_cost"] = True
+            for (dim, value), slot in sorted(by_dim.items()):
+                cost_text = str(slot["cost"]) if slot["any_cost"] else "n/a"
+                add(
+                    f"| {dim} | {_cell(value)} | {slot['calls']} | {slot['in']} | "
+                    f"{slot['out']} | {cost_text} |"
+                )
+            add("")
+
     problems = [e for e in results if e["status"] in ("failure", "skipped")]
     add("## Failures and skips")
     add("")
@@ -161,6 +206,8 @@ def derive_summary(event_log_path: Path) -> str:
         for event in problems:
             index = event.get("item_index")
             unit = event["step"] if index is None else f"{event['step']}[{index}]"
+            if event.get("cell_index") is not None:
+                unit = f"cell[{event['cell_index']}]/{unit}"
             error = event.get("error") or {}
             add(
                 f"| {unit} | {event['status']} | {error.get('category', '?')} "
@@ -181,7 +228,7 @@ def derive_summary(event_log_path: Path) -> str:
         add("")
 
     for name in sorted(outputs):
-        if name.startswith("summary_") and isinstance(outputs[name], dict):
+        if name.startswith("summary_") and isinstance(outputs[name], dict | list):
             add(f"## {name.removeprefix('summary_').replace('_', ' ').title()}")
             add("")
             add("```json")

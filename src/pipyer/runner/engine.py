@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from pipyer.records.run import (
+    CellHaltedEvent,
+    CellStartedEvent,
     EachExpandedEvent,
     RunFinishedEvent,
     RunHaltedEvent,
@@ -36,16 +38,17 @@ from pipyer.runner.checkpoint import (
 from pipyer.runner.components import StepFailure, get_executor
 from pipyer.runner.components._subproc import kill_active_children
 from pipyer.runner.context import (
+    MatrixCell,
     RunContext,
     StepState,
     UpstreamFailure,
+    expand_matrix,
     new_run_id,
     unit_key,
 )
 from pipyer.runner.events import EventLog
 from pipyer.runner.resume import ResumePlan, load_resume_plan
 from pipyer.runner.summary import derive_summary
-from pipyer.schema.refs import Kind, classify
 from pipyer.schema.workflow import Settings, Workflow
 from pipyer.secrets import resolve_secret
 from pipyer.validation import Issue, validate_file
@@ -171,36 +174,47 @@ def _input_matches_decl(value: Any, declared_type: str) -> bool:
 
 
 def _runtime_unsupported_issues(workflow: Workflow) -> list[Issue]:
-    issues: list[Issue] = []
-    if workflow.matrix:
-        issues.append(
-            Issue(
-                loc="matrix",
-                code="unsupported_runtime_feature",
-                message=(
-                    "matrix execution is not implemented yet; `pipyer run` rejects "
-                    "declared matrix dimensions until Feature 003"
-                ),
+    return []
+
+
+def _resolve_alias_model_for_cell(
+    model: str,
+    *,
+    inputs: dict[str, Any],
+    matrix_params: dict[str, Any],
+) -> str:
+    from pipyer.schema.refs import parse
+
+    ref = parse(model)
+    if ref is None:
+        return model
+    root = inputs if ref.root == "inputs" else matrix_params if ref.root == "matrix" else None
+    if root is None:
+        return model
+    value: Any = root[ref.segments[0]]
+    for segment in ref.segments[1:]:
+        if isinstance(value, dict):
+            value = value[segment]
+        elif isinstance(value, list):
+            value = value[int(segment)]
+        else:
+            raise ValidationFailure(
+                [
+                    Issue(
+                        loc="models",
+                        code="alias_ref_resolution_failed",
+                        message=f"cannot resolve alias model reference {model!r}",
+                    )
+                ]
             )
-        )
-    for alias_name, alias in workflow.models.items():
-        kind, _ref = classify(alias.model)
-        if kind is Kind.REF:
-            issues.append(
-                Issue(
-                    loc=f"models.{alias_name}.model",
-                    code="unsupported_runtime_feature",
-                    message=(
-                        "alias model references are validation-only until Feature 003; "
-                        "`pipyer run` requires a concrete model identifier"
-                    ),
-                )
-            )
-    return issues
+    return str(value)
 
 
 def _preflight_secrets(
-    workflow: Workflow, model_overrides: dict[str, Any] | None = None
+    workflow: Workflow,
+    *,
+    inputs: dict[str, Any],
+    model_overrides: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """R15: resolve every needed credential before the run directory exists.
 
@@ -215,17 +229,24 @@ def _preflight_secrets(
         if step.component in ("llm", "llm_judge")
     }
     providers: dict[str, str] = {}
+    cells = expand_matrix(workflow.matrix) or [MatrixCell(index=0, params={})]
     for alias_name in sorted(used_aliases):
         if model_overrides and alias_name in model_overrides:
             providers[alias_name] = "override"  # injected model makes no provider call
             continue
         alias = workflow.models[alias_name]
-        key = secret_key_for(alias.model, alias.settings)
-        if key is None:
-            providers[alias_name] = "none"
-        else:
-            _secret, provider = resolve_secret(key)  # value discarded; resolved again at call time
-            providers[alias_name] = provider
+        seen_providers: set[str] = set()
+        for cell in cells:
+            model = _resolve_alias_model_for_cell(
+                alias.model, inputs=inputs, matrix_params=cell.params
+            )
+            key = secret_key_for(model, alias.settings)
+            if key is None:
+                seen_providers.add("none")
+            else:
+                _secret, provider = resolve_secret(key)  # value discarded; resolved at call time
+                seen_providers.add(provider)
+        providers[alias_name] = next(iter(seen_providers)) if len(seen_providers) == 1 else "mixed"
     return providers
 
 
@@ -254,7 +275,9 @@ def run_workflow(
     unsupported = _runtime_unsupported_issues(workflow)
     if unsupported:
         raise ValidationFailure(unsupported)
-    secret_providers = _preflight_secrets(workflow, model_overrides)
+    secret_providers = _preflight_secrets(
+        workflow, inputs=run_inputs, model_overrides=model_overrides
+    )
 
     resume_plan: ResumePlan | None = None
     if resume:
@@ -305,6 +328,12 @@ class _Engine:
         self.resume_plan = resume_plan
         self.totals = _Totals()
         self.failure_count = 0
+        self.cell_failure_count = 0
+        self.cell_attempted_units: list[str] = []
+        self.cell_failed_units: list[str] = []
+        self.cell_not_attempted_units: list[str] = []
+        self.cell_not_attempted = 0
+        self.cell_halt_reason: str | None = None
         self.item_completions = 0
         self.halt_reason: str | None = None
         self.interrupted = False
@@ -316,6 +345,28 @@ class _Engine:
         self.attempted_units: list[str] = []
         self.failed_units: list[str] = []
         self.not_attempted_units: list[str] = []
+        self.matrix_cells = expand_matrix(ctx.workflow.matrix)
+        self.cell_states: dict[int | None, dict[str, StepState]] = {}
+        self.cell_outputs: dict[int, dict[str, Any]] = {}
+
+    def _matrix_run(self) -> bool:
+        return bool(self.matrix_cells)
+
+    def _fresh_step_states(self) -> dict[str, StepState]:
+        return {
+            step.name: StepState(each=step.each is not None) for step in self.ctx.workflow.steps
+        }
+
+    def _activate_cell(self, cell: MatrixCell | None) -> None:
+        self.ctx.set_cell(cell)
+        key = None if cell is None else cell.index
+        self.ctx.steps = self.cell_states.setdefault(key, self._fresh_step_states())
+        self.cell_failure_count = 0
+        self.cell_attempted_units = []
+        self.cell_failed_units = []
+        self.cell_not_attempted_units = []
+        self.cell_not_attempted = 0
+        self.cell_halt_reason = None
 
     # ------------------------------------------------------------------ events
 
@@ -334,6 +385,27 @@ class _Engine:
 
         events, _ = parse_event_log((self.ctx.run_dir / "events.jsonl").read_text(encoding="utf-8"))
         return events
+
+    def _emit_cell_halted(self) -> None:
+        assert self.ctx.cell_index is not None
+        assert self.cell_halt_reason is not None
+        self._emit(
+            CellHaltedEvent(
+                schema_version=RECORD_SCHEMA_VERSION,
+                run_id=self.ctx.run_id,
+                cell_index=self.ctx.cell_index,
+                matrix=dict(self.ctx.matrix_params),
+                reason=self.cell_halt_reason,
+                attempted=len(self.cell_attempted_units),
+                failed=self.cell_failure_count,
+                not_attempted=self.cell_not_attempted,
+                attempted_units=self.cell_attempted_units,
+                failed_units=self.cell_failed_units,
+                not_attempted_units=self.cell_not_attempted_units,
+                at=self._now(),
+            )
+        )
+        self.cell_outputs[self.ctx.cell_index] = self._resolve_declared_outputs()
 
     # -------------------------------------------------------------------- run
 
@@ -365,11 +437,35 @@ class _Engine:
 
             status: RunStatus = "completed"
             try:
-                for step in ctx.workflow.steps:
-                    self._run_step(step)
+                cells: list[MatrixCell | None]
+                if self.matrix_cells:
+                    cells = list(self.matrix_cells)
+                else:
+                    cells = [None]
+                for cell in cells:
+                    self._activate_cell(cell)
+                    if cell is not None:
+                        self._emit(
+                            CellStartedEvent(
+                                schema_version=RECORD_SCHEMA_VERSION,
+                                run_id=ctx.run_id,
+                                cell_index=cell.index,
+                                matrix=cell.params,
+                                at=self._now(),
+                            )
+                        )
+                    for step in ctx.workflow.steps:
+                        self._run_step(step)
+                        if self.halt_reason is not None:
+                            status = "halted"
+                            break
+                        if self.cell_halt_reason is not None:
+                            self._emit_cell_halted()
+                            break
                     if self.halt_reason is not None:
-                        status = "halted"
                         break
+                    if cell is not None:
+                        self.cell_outputs[cell.index] = self._resolve_declared_outputs()
             except _Interrupted:
                 status = "interrupted"
             except KeyboardInterrupt:
@@ -445,19 +541,19 @@ class _Engine:
     def _replay_projections(self) -> None:
         """Rebuild step state from the prior log so references resolve on resume."""
         assert self.resume_plan is not None
-        for step in self.ctx.workflow.steps:
-            self.ctx.steps[step.name] = StepState(each=step.each is not None)
         for event in self.resume_plan.events:
+            cell_key = event.get("cell_index")
+            states = self.cell_states.setdefault(cell_key, self._fresh_step_states())
             if event.get("event") == "each_expanded":
-                state = self.ctx.steps.get(event["step"])
+                state = states.get(event["step"])
                 if state is not None:
                     state.item_count = event["item_count"]
             if event.get("event") != "step_result":
                 continue
-            state = self.ctx.steps.get(event["step"])
+            state = states.get(event["step"])
             if state is None:
                 continue
-            key = unit_key(event["step"], event.get("item_index"))
+            key = unit_key(event["step"], event.get("item_index"), event.get("cell_index"))
             # Latest record wins, and the three states are mutually exclusive:
             # a unit retried to success must shed its stale failure AND its
             # stale skip marker (acceptance-run finding - compare succeeded on
@@ -487,7 +583,7 @@ class _Engine:
         if step.each is None:
             self._run_unit(step, None)
             return
-        scalar_key = unit_key(step.name, None)
+        scalar_key = ctx.unit_key(step.name, None)
         if (
             self.resume_plan is not None
             and scalar_key in self.resume_plan.failed_units
@@ -502,7 +598,9 @@ class _Engine:
         except UpstreamFailure as failure:
             started = self._now()
             self._finish_unit(
-                step, None, ("skip", unit_key(step.name, None), started, failure.upstream_key, {})
+                step,
+                None,
+                ("skip", ctx.unit_key(step.name, None), started, failure.upstream_key, {}),
             )
             return
         except Exception as error:  # noqa: BLE001 - runtime data failures are recorded
@@ -547,6 +645,8 @@ class _Engine:
                 schema_version=RECORD_SCHEMA_VERSION,
                 run_id=ctx.run_id,
                 step=step.name,
+                cell_index=ctx.cell_index,
+                matrix=dict(ctx.matrix_params) if ctx.matrix_params else None,
                 item_count=len(collection),
                 at=self._now(),
             )
@@ -617,8 +717,10 @@ class _Engine:
         # Recorded inside the halt reason/totals; not_attempted units have no
         # StepResult by definition - they were never started, and the halt
         # event plus totals account for them.
-        keys = [unit_key(step.name, index) for index in indices]
+        keys = [self.ctx.unit_key(step.name, index) for index in indices]
         self.not_attempted_units.extend(keys)
+        self.cell_not_attempted_units.extend(keys)
+        self.cell_not_attempted += len(keys)
         self.totals_not_attempted = getattr(self, "totals_not_attempted", 0) + len(keys)
 
     # ------------------------------------------------------------------- units
@@ -630,7 +732,7 @@ class _Engine:
         """Runs in a worker thread: produces the outcome without touching shared
         state or the event log; `_finish_unit` (engine thread) records it."""
         ctx = self.ctx
-        key = unit_key(step.name, index)
+        key = ctx.unit_key(step.name, index)
         started = self._now()
 
         # Resolve inputs first: an upstream failure becomes a skip record.
@@ -677,7 +779,13 @@ class _Engine:
                     config=config,
                     phase="config resolution",
                 )
-        input_hash = ctx.unit_input_hash(step.name, _hashable(resolved), _hashable(config))
+        resource_digests = self._resource_digests(step, config, index)
+        input_hash = ctx.unit_input_hash(
+            step.name,
+            _hashable(resolved),
+            _hashable(config),
+            resource_digests=resource_digests,
+        )
 
         prior = self.prior_completed.get(key)
         if prior is not None and prior == input_hash and key not in self.retry_units:
@@ -716,6 +824,37 @@ class _Engine:
             projection, usage = outcome, None
         return ("success", key, started, projection, usage, input_hash, input_refs)
 
+    def _resource_digests(self, step, config: dict[str, Any], index: int | None) -> dict[str, Any]:
+        digests: dict[str, Any] = {}
+
+        def add(label: str, raw: Any, *, base: Path = self.ctx.workflow_dir) -> None:
+            if raw in (None, ""):
+                return
+            path = Path(str(raw))
+            resolved = path if path.is_absolute() else base / path
+            digests[label] = _file_digest(resolved)
+
+        if step.component == "python":
+            add("python.config.script", step.config.script)
+        elif step.component in ("llm", "llm_judge"):
+            add("llm.config.prompt", step.config.prompt)
+            if isinstance(step.config.output_schema, str):
+                add("llm.config.output_schema", step.config.output_schema)
+        elif step.component == "file_read":
+            raw = config.get("path_resolved", step.config.path)
+            add("file_read.config.path_resolved", raw)
+        elif step.component == "shell":
+            for i, arg in enumerate(step.config.command):
+                if not isinstance(arg, str):
+                    continue
+                path = Path(arg)
+                if not path.is_absolute() and "/" not in arg and "\\" not in arg:
+                    continue
+                resolved = path if path.is_absolute() else self.ctx.workflow_dir / path
+                if resolved.is_file():
+                    digests[f"shell.config.command[{i}]"] = _file_digest(resolved)
+        return digests
+
     def _unclassified_failure_outcome(
         self,
         step,
@@ -728,7 +867,7 @@ class _Engine:
         config: dict[str, Any] | None = None,
         phase: str,
     ):
-        key = unit_key(step.name, index)
+        key = self.ctx.unit_key(step.name, index)
         failure = StepFailure(
             ErrorCategory.UNCLASSIFIED,
             f"{phase} failed: {type(error).__name__}: {error}",
@@ -750,6 +889,7 @@ class _Engine:
             step.name,
             _hashable(fingerprint),
             _hashable(hash_config),
+            resource_digests=self._resource_digests(step, hash_config, index),
         )
         return ("failure", key, started, failure, input_hash, input_refs)
 
@@ -766,6 +906,7 @@ class _Engine:
         if kind == "failed_carryover":
             state.failed.add(key)
             self.totals.failed += 1  # still failed; counts against status/exit, not re-run
+            self.cell_failure_count += 1
             return
 
         if kind == "resume_skip":
@@ -820,8 +961,11 @@ class _Engine:
             self.totals.attempted += 1
             self.attempted_units.append(key)
             self.failed_units.append(key)
+            self.cell_attempted_units.append(key)
+            self.cell_failed_units.append(key)
             self.totals.add_usage(failure.usage)
             self.failure_count += 1
+            self.cell_failure_count += 1
             if key in self.prior_completed:
                 self.totals.recomputed.append(key)
             self._check_budget(step, index)
@@ -849,6 +993,7 @@ class _Engine:
         self.totals.succeeded += 1
         self.totals.attempted += 1
         self.attempted_units.append(key)
+        self.cell_attempted_units.append(key)
         self.totals.add_usage(usage)
         if key in self.prior_completed:
             self.totals.recomputed.append(key)
@@ -889,6 +1034,8 @@ class _Engine:
                 finished_at=finished,
                 duration_ms=duration_ms,
                 usage=usage,
+                cell_index=self.ctx.cell_index,
+                matrix=dict(self.ctx.matrix_params) if self.ctx.matrix_params else None,
                 item_index=index,
                 input_refs=input_refs,
                 input_hash=input_hash,
@@ -906,11 +1053,16 @@ class _Engine:
 
     def _check_budget(self, step, index: int | None) -> None:
         settings = self.ctx.settings
-        if settings.max_failures is not None and self.failure_count > settings.max_failures:
-            self.halt_reason = (
-                f"failure budget exceeded: {self.failure_count} failures > "
+        failure_count = self.cell_failure_count if self._matrix_run() else self.failure_count
+        if settings.max_failures is not None and failure_count > settings.max_failures:
+            reason = (
+                f"failure budget exceeded: {failure_count} failures > "
                 f"max_failures={settings.max_failures}"
             )
+            if self._matrix_run():
+                self.cell_halt_reason = reason
+            else:
+                self.halt_reason = reason
             return
         if settings.max_failure_rate is not None and index is not None:
             state = self.ctx.steps[step.name]
@@ -918,20 +1070,42 @@ class _Engine:
             if total:
                 rate = len(state.failed) / total
                 if rate > settings.max_failure_rate:
-                    self.halt_reason = (
+                    reason = (
                         f"failure budget exceeded: step {step.name!r} item failure rate "
                         f"{rate:.2f} > max_failure_rate={settings.max_failure_rate}"
                     )
+                    if self._matrix_run():
+                        self.cell_halt_reason = reason
+                    else:
+                        self.halt_reason = reason
 
     # ----------------------------------------------------------------- finish
 
-    def _final_totals(self, status: RunStatus) -> dict[str, Any]:
+    def _resolve_declared_outputs(self) -> dict[str, Any]:
         outputs: dict[str, Any] = {}
         for name, ref in self.ctx.workflow.outputs.items():
             try:
                 outputs[name] = self.ctx.resolve(ref, index=None, each_ref=None)
             except Exception:
                 outputs[name] = None
+        return _hashable(outputs)
+
+    def _final_totals(self, status: RunStatus) -> dict[str, Any]:
+        outputs: dict[str, Any]
+        if self._matrix_run():
+            outputs = {name: [] for name in self.ctx.workflow.outputs}
+            for cell in self.matrix_cells:
+                cell_outputs = self.cell_outputs.get(cell.index, {})
+                for name in self.ctx.workflow.outputs:
+                    outputs[name].append(
+                        {
+                            "cell_index": cell.index,
+                            "matrix": cell.params,
+                            "value": cell_outputs.get(name),
+                        }
+                    )
+        else:
+            outputs = self._resolve_declared_outputs()
         return {
             "attempted": self.totals.attempted,
             "succeeded": self.totals.succeeded,
@@ -956,3 +1130,15 @@ def _hashable(value: Any) -> Any:
     import json
 
     return json.loads(json.dumps(value, default=str))
+
+
+def _file_digest(path: Path) -> dict[str, Any]:
+    try:
+        blob = path.read_bytes()
+    except OSError as error:
+        return {"path": str(path), "missing": True, "error": str(error)}
+    return {
+        "path": str(path),
+        "sha256": "sha256:" + __import__("hashlib").sha256(blob).hexdigest(),
+        "bytes": len(blob),
+    }

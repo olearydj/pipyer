@@ -187,5 +187,78 @@ def run(
         raise typer.Exit(1)
 
 
+@app.command()
+def compare(
+    left: Annotated[str, typer.Argument(help="Left run id or run directory")],
+    right: Annotated[str | None, typer.Argument(help="Right run id or run directory")] = None,
+    results_dir: Annotated[
+        Path, typer.Option("--results-dir", help="Run results directory")
+    ] = Path("runs"),
+    left_cell: Annotated[
+        list[str] | None,
+        typer.Option("--left-cell", help="Left cell selector as dimension=value; repeatable"),
+    ] = None,
+    right_cell: Annotated[
+        list[str] | None,
+        typer.Option("--right-cell", help="Right cell selector as dimension=value; repeatable"),
+    ] = None,
+    left_cell_index: Annotated[
+        int | None, typer.Option("--left-cell-index", help="Disambiguate/select left cell index")
+    ] = None,
+    right_cell_index: Annotated[
+        int | None, typer.Option("--right-cell-index", help="Disambiguate/select right cell index")
+    ] = None,
+    stability: Annotated[
+        bool, typer.Option("--stability", help="Mark comparison as identical-rerun stability")
+    ] = False,
+    output_dir: Annotated[
+        Path | None, typer.Option("--output-dir", help="Directory for comparison.md/json")
+    ] = None,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Print comparison JSON to stdout after writing artifacts")
+    ] = False,
+) -> None:
+    """Compare two logical runs, or two selected cells within one run."""
+    from pipyer.compare import CellSelector, CompareError, compare_runs
+
+    try:
+        left_selector = CellSelector(
+            params=_parse_cell_selector(left_cell), cell_index=left_cell_index
+        )
+        right_selector = CellSelector(
+            params=_parse_cell_selector(right_cell), cell_index=right_cell_index
+        )
+        record, target_dir = compare_runs(
+            left,
+            right,
+            results_dir=results_dir,
+            left_selector=left_selector,
+            right_selector=right_selector,
+            stability=stability,
+            output_dir=output_dir,
+        )
+    except (CompareError, ValueError) as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(2) from error
+
+    if json_output:
+        typer.echo(json.dumps(record, indent=2))
+    else:
+        typer.echo(f"comparison: {target_dir / 'comparison.md'}")
+        typer.echo(f"json: {target_dir / 'comparison.json'}")
+
+
+def _parse_cell_selector(pairs: list[str] | None) -> dict[str, object] | None:
+    if not pairs:
+        return None
+    selector: dict[str, object] = {}
+    for pair in pairs:
+        key, sep, raw = pair.partition("=")
+        if not sep or not key:
+            raise ValueError(f"cell selectors must be dimension=value, got {pair!r}")
+        selector[key] = yaml.safe_load(raw) if raw != "" else ""
+    return selector
+
+
 def main() -> None:
     app()

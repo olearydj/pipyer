@@ -29,6 +29,8 @@ def test_unit_keys_are_positional_never_value_based():
     assert unit_key("grade", None) == "grade"
     assert unit_key("grade", 0) == "grade[0]"
     assert unit_key("grade", 7) == "grade[7]"
+    assert unit_key("grade", None, 0) == "cell[0]/grade"
+    assert unit_key("grade", 7, 0) == "cell[0]/grade[7]"
     # Duplicate item VALUES are irrelevant: two items with identical content
     # still occupy distinct indices, so distinct keys.
     assert unit_key("grade", 0) != unit_key("grade", 1)

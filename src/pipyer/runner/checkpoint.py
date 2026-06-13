@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from pipyer.records.run import CheckpointSnapshot, CompletedEntry, parse_event_log
-from pipyer.runner.context import unit_key
+from pipyer.runner.context import event_unit_key
 
 RECORD_SCHEMA_VERSION = "1"
 # Deterministic timestamp inside snapshots so log-reconstruction equals the
@@ -51,10 +51,10 @@ def build_checkpoint(
             workflow_hash = event["workflow_hash"]
             config_hash = event.get("config_snapshot", {}).get("config_hash", "")
         elif kind == "step_result" and event.get("status") == "success":
-            key = unit_key(event["step"], event.get("item_index"))
+            key = event_unit_key(event)
             completed[key] = CompletedEntry(input_hash=event["input_hash"], event_ref=str(index))
         elif kind == "step_result":
-            key = unit_key(event["step"], event.get("item_index"))
+            key = event_unit_key(event)
             completed.pop(key, None)
     return CheckpointSnapshot(
         schema_version=RECORD_SCHEMA_VERSION,
