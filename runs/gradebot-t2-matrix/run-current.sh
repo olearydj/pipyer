@@ -10,6 +10,7 @@ archives the result using the Sprint 03 matrix convention.
 
 Options:
   --yes                    Skip the initial live-spend confirmation.
+  --dry-run-only           Validate and dry-run the staged workflow, then stop before live calls.
   --no-dry-run             Skip the dry-run command before the live run.
   --auto-resume            If the live run exits 130, resume automatically.
   --retry-failed-on-resume Add --retry-failed to automatic/manual resumes.
@@ -45,6 +46,7 @@ split_csv_models() {
 
 YES=0
 DO_DRY_RUN=1
+DRY_RUN_ONLY=0
 AUTO_RESUME=0
 RETRY_FAILED_ON_RESUME=0
 
@@ -52,6 +54,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes)
       YES=1
+      shift
+      ;;
+    --dry-run-only)
+      DRY_RUN_ONLY=1
+      DO_DRY_RUN=1
       shift
       ;;
     --no-dry-run)
@@ -77,6 +84,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$DRY_RUN_ONLY" -eq 1 ]]; then
+  DO_DRY_RUN=1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -117,7 +128,11 @@ CREATED_BY="runs/gradebot-t2-matrix/run-current.sh"
 WORKFLOW="$PENDING_DIR/workflows/gradebot-t2-matrix/workflow.yaml"
 
 if [[ "$YES" -ne 1 ]]; then
-  printf "This will run live GradeBot T2 matrix LLM grading from the current repo state.\n"
+  if [[ "$DRY_RUN_ONLY" -eq 1 ]]; then
+    printf "This will validate and dry-run the live GradeBot T2 matrix workflow, then stop before provider calls.\n"
+  else
+    printf "This will run live GradeBot T2 matrix LLM grading from the current repo state.\n"
+  fi
   printf "Corpus: %s\n" "$CORPUS"
   printf "Results staging dir: %s\n" "$RESULTS_DIR"
   printf "Raw baseline: %s\n" "$RAW_BASELINE"
@@ -127,7 +142,12 @@ if [[ "$YES" -ne 1 ]]; then
   for i in "${!MATRIX_MODELS[@]}"; do
     printf "  cell[%s] grader_model=%s\n" "$i" "${MATRIX_MODELS[$i]}"
   done
-  if ! confirm "Continue"; then
+  if [[ "$DRY_RUN_ONLY" -eq 1 ]]; then
+    CONFIRM_PROMPT="Continue with dry-run-only preflight"
+  else
+    CONFIRM_PROMPT="Continue"
+  fi
+  if ! confirm "$CONFIRM_PROMPT"; then
     exit 130
   fi
 fi
@@ -191,6 +211,73 @@ if [[ "$DO_DRY_RUN" -eq 1 ]]; then
     printf "Dry-run failed; partial archive remains at %s\n" "$PENDING_DIR" >&2
     exit "$LAST_STATUS"
   fi
+fi
+
+if [[ "$DRY_RUN_ONLY" -eq 1 ]]; then
+  FINAL_DIR="$SCRIPT_DIR/preflight-$START_STAMP"
+  if [[ -e "$FINAL_DIR" ]]; then
+    FINAL_DIR="$SCRIPT_DIR/preflight-$START_STAMP-2"
+  fi
+  {
+    printf "\n## Archive Finalization\n\n"
+    printf -- "- Final preflight archive: \`%s\`\n" "$FINAL_DIR"
+    printf -- "- Live run was not launched.\n"
+  } >> "$COMMANDS_MD"
+  mv "$PENDING_DIR" "$FINAL_DIR"
+  uv run python - "$FINAL_DIR" "$START_ISO" "$CREATED_BY" "${MATRIX_MODELS[@]}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+archive = Path(sys.argv[1])
+created_at = sys.argv[2]
+created_by = sys.argv[3]
+models = sys.argv[4:]
+manifest = {
+    "archive_schema": "pipyer-local-matrix-preflight-v0",
+    "created_at": created_at,
+    "created_by": created_by,
+    "live_run_launched": False,
+    "matrix_cells": {
+        f"cell[{index}]": {"grader_model": model} for index, model in enumerate(models)
+    },
+    "retained_artifacts": {
+        "commands": "commands.md",
+        "transcript": "transcript.log",
+        "staged_workflow": "workflows/gradebot-t2-matrix/workflow.yaml",
+        "workflow_snapshot": "inputs/current-worktree",
+    },
+    "current_repo_state": {
+        "head": (archive / "inputs/repo/git-head.txt").read_text(encoding="utf-8").strip(),
+        "status_short_file": "inputs/repo/git-status-short.txt",
+        "diff_stat_file": "inputs/repo/git-diff-stat.txt",
+        "diff_patch_file": "inputs/repo/git-diff.patch",
+        "untracked_file": "inputs/repo/git-untracked.txt",
+    },
+}
+(archive / "manifest.json").write_text(
+    json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+(archive / "README.md").write_text(
+    f"""# GradeBot T2 Matrix Preflight
+
+Generated {created_at} by `{created_by}`.
+
+This archive records validation and dry-run of the staged live matrix workflow.
+No provider calls were launched.
+
+- `commands.md`: exact commands and exit statuses.
+- `transcript.log`: captured terminal output.
+- `manifest.json`: structured preflight metadata.
+- `workflows/`: staged workflow tree used for validation.
+- `inputs/`: source workflow and Git-state snapshots.
+""",
+    encoding="utf-8",
+)
+PY
+  printf "\nDry-run-only preflight complete:\n%s\n" "$FINAL_DIR"
+  exit 0
 fi
 
 RESUME_ARGS=()
