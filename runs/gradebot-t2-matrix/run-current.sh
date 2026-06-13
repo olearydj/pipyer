@@ -257,6 +257,13 @@ if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/run.json" ]]; then
   exit 1
 fi
 
+RUN_RECORD_STATUS="$(run_record_status "$RUN_DIR" 2>/dev/null || true)"
+if [[ "$RUN_RECORD_STATUS" == "interrupted" ]]; then
+  printf "Run remains interrupted; partial archive remains at %s\n" "$PENDING_DIR" >&2
+  printf "Resume with the same staged workflow and results dir, or remove the pending directory if it is disposable.\n" >&2
+  exit 130
+fi
+
 mv "$RUN_DIR" "$ARTIFACTS_DIR/run"
 rmdir "$RESULTS_DIR" 2>/dev/null || true
 
