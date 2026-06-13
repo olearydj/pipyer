@@ -1,0 +1,184 @@
+schema_version: "2"
+name: gradebot_t2_matrix
+description: Re-grade the archived INSY 3010 Spring 2026 Test 2 corpus across a grader-model matrix.
+
+inputs:
+  corpus_dir:
+    type: path
+    description: Absolute path to the archived T2 grading corpus (referenced, never copied - contains PII)
+  config_file:
+    type: path
+    required: false
+    default: t2-config.json
+    description: Grading config within the corpus (problems, test cases, rubrics)
+  raw_baseline_csv:
+    type: path
+    required: false
+    default: published/2026-04-03-v2-patched/scored/grading_results_20260402_211734.csv
+    description: Raw v2 machine baseline (pre-patch), relative to the corpus
+  published_baseline_csv:
+    type: path
+    required: false
+    default: published/2026-04-03-v2-patched/final/grading_results_20260402_222223.csv
+    description: Published v2-patched baseline (post-human-review), relative to the corpus
+  patch_manifest:
+    type: path
+    required: false
+    default: published/2026-04-03-v2-patched/patched/patch_manifest.json
+    description: The 12 rubric corrections + 74 sanitizations (expected disagreements), relative to the corpus
+  annotations_file:
+    type: path
+    required: false
+    default: ""
+    description: PII-side annotations (academic-integrity overrides, absent students); lives next to the corpus, never in this repo
+  point_weights:
+    type: json
+    required: false
+    default:
+      test2.1-count_unique_in_range: 30
+      test2.2-fill_bin: 25
+      test2.3-transpose: 25
+      test2.4-total_by_group: 20
+    description: Problem point weights - data, not code (FR-020)
+  scoring_rules:
+    type: json
+    required: false
+    default:
+      llm_rubric_item_deduction: 0.12
+      execution_failure_penalty: 0.20
+      example_test_failure_penalty: 0.10
+      generalization_test_failure_penalty: 0.10
+      generalization_test_failure_if_example_failed_penalty: 0.10
+      minimum_score_threshold: 0.35
+      post_threshold_scaling_factor: 1.0
+      apply_test_penalties_when_execution_fails: false
+    description: The archived T2 scoring parameters (deductions are quantized - the comparison relies on it)
+
+models:
+  grader:
+    model: matrix.grader_model
+    settings: {}
+
+matrix:
+  grader_model:
+    - anthropic:claude-sonnet-4-5-20250929
+    - anthropic:claude-sonnet-4-6
+
+steps:
+  - name: collect
+    component: python
+    config:
+      script: ../gradebot-t2/scripts/collect_items.py
+    inputs:
+      corpus_dir: inputs.corpus_dir
+      config_file: inputs.config_file
+      baseline_csv: inputs.raw_baseline_csv
+      published_baseline_csv: inputs.published_baseline_csv
+      patch_manifest: inputs.patch_manifest
+      point_weights: inputs.point_weights
+
+  - name: run_tests
+    component: shell
+    each: steps.collect.output.items
+    config:
+      command:
+        - uv
+        - run
+        - python
+        - ../gradebot-t2/scripts/run_problem_tests.py
+      parse_stdout: json
+      timeout_s: 60
+    inputs:
+      submission_code: item.code
+      function_name: item.function_name
+      test_cases: item.test_cases
+
+  - name: grade
+    component: llm
+    each: steps.collect.output.items
+    config:
+      model: grader
+      prompt: ../gradebot-t2/prompts/grade_problem.md
+      output_schema:
+        type: object
+        properties:
+          items:
+            type: array
+            items:
+              type: object
+              properties:
+                key:
+                  type: string
+                verdict:
+                  type: boolean
+              required:
+                - key
+                - verdict
+          feedback:
+            type: string
+        required:
+          - items
+          - feedback
+      max_validation_retries: 2
+      timeout_s: 300
+    inputs:
+      problem_context: item.problem_context
+      rubric_items: item.rubric_text
+      submission_code: item.code
+      test_summary: steps.run_tests.stdout
+
+  - name: score
+    component: python
+    config:
+      script: ../gradebot-t2/scripts/score_items.py
+    inputs:
+      items: steps.collect.output.items
+      test_results: steps.run_tests.stdout
+      grades: steps.grade.output
+      scoring_rules: inputs.scoring_rules
+
+  - name: write_feedback
+    component: file_write
+    each: steps.collect.output.items
+    config:
+      path: item.feedback_path
+      format: markdown
+    inputs:
+      content: steps.grade.output.feedback
+
+  - name: compare
+    component: python
+    config:
+      script: ../gradebot-t2/scripts/compare.py
+    inputs:
+      rows: steps.score.output.rows
+      raw_baseline_csv: steps.collect.output.raw_baseline_path
+      published_baseline_csv: steps.collect.output.published_baseline_path
+      patch_manifest: steps.collect.output.patch_manifest_path
+      annotations_file: inputs.annotations_file
+
+  - name: write_comparison
+    component: file_write
+    config:
+      path: comparison/comparison.json
+      format: json
+    inputs:
+      content: steps.compare.output.entries
+
+  - name: write_report
+    component: file_write
+    config:
+      path: comparison/comparison.md
+      format: markdown
+    inputs:
+      content: steps.compare.output.report_markdown
+
+settings:
+  concurrency: 4
+  max_failures: 20
+  max_failure_rate: 0.25
+  results_dir: runs
+
+outputs:
+  summary_agreement: steps.compare.output.stats
+  comparison_report: steps.write_report.path

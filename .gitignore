@@ -27,6 +27,13 @@ runs/*
 runs/gradebot-t2/*
 !runs/gradebot-t2/README.md
 !runs/gradebot-t2/run-current.sh
+!runs/gradebot-t2-matrix/
+runs/gradebot-t2-matrix/*
+!runs/gradebot-t2-matrix/README.md
+!runs/gradebot-t2-matrix/common.sh
+!runs/gradebot-t2-matrix/compare-existing.sh
+!runs/gradebot-t2-matrix/smoke-current.sh
+!runs/gradebot-t2-matrix/run-current.sh
 
 # Spike scratch output (evidence summarized into the spike report; raw output disposable)
 spike/results/
