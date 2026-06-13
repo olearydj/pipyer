@@ -353,6 +353,30 @@ output_files = [path for path in outputs_dir.rglob("*") if path.is_file()] if ou
 comparison_files = [path for path in (outputs_dir / "comparison").glob("*") if path.is_file()] if (outputs_dir / "comparison").exists() else []
 feedback_files = [path for path in (outputs_dir / "feedback").glob("*.md") if path.is_file()] if (outputs_dir / "feedback").exists() else []
 summary_agreement = run_record.get("totals", {}).get("outputs", {}).get("summary_agreement")
+declared_output_paths = {}
+for name, value in run_record.get("totals", {}).get("outputs", {}).items():
+    if not isinstance(value, str):
+        continue
+    marker = f"/{run_record.get('run_id')}/"
+    archive_relative = None
+    if marker in value:
+        archive_relative = Path("artifacts/run") / value.split(marker, 1)[1]
+    elif value.startswith("outputs/"):
+        archive_relative = Path("artifacts/run") / value
+
+    if archive_relative is None:
+        declared_output_paths[name] = {
+            "recorded": value,
+            "archive_relative": None,
+            "exists": False,
+        }
+        continue
+
+    declared_output_paths[name] = {
+        "recorded": value,
+        "archive_relative": archive_relative.as_posix(),
+        "exists": (archive / archive_relative).exists(),
+    }
 
 manifest = {
     "archive_schema": "pipyer-local-run-archive-v0",
@@ -423,6 +447,7 @@ manifest = {
         "totals": run_record.get("totals"),
         "summary_agreement": summary_agreement,
     },
+    "declared_output_paths": declared_output_paths,
 }
 
 (archive / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -450,6 +475,13 @@ Generated {os.environ['START_ISO']} by `runs/gradebot-t2/run-current.sh`.
 - `inputs/current-worktree/`: workflow tree copied before the run.
 - `inputs/repo/`: Git head, status, diff stat, and patch for the current repo state.
 - `inputs/source-docs/`: Feature 002 source docs copied as context.
+
+## Declared Output Paths
+
+The raw Pipyer run record is preserved unchanged in `artifacts/run/`. File
+outputs recorded there may still point at the temporary staging directory used
+during execution. Archive-stable paths are recorded in `manifest.json` under
+`declared_output_paths`.
 
 ## Notes
 

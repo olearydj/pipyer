@@ -17,6 +17,9 @@ The script:
 - stores the raw Pipyer run directory under `artifacts/run/`;
 - snapshots the workflow tree, Git head/status/diff, and relevant Sprint 02 docs;
 - writes `commands.md`, `manifest.json`, and `README.md`.
+- records archive-stable paths for declared file outputs in
+  `manifest.json.declared_output_paths` while leaving raw `run.json` and
+  `events.jsonl` untouched.
 
 The default inputs match the Sprint 02 acceptance baseline. Override paths with
 environment variables when needed:
