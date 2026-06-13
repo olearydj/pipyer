@@ -1,10 +1,13 @@
 # Sprint 03 Brief: Matrix Execution and Run Comparison (Feature 003, DEMA Experiment Runner)
 
-Source material for `/speckit.specify`, consolidated 2026-06-12 from the Feature 002 record.
-Transcribe decided content; do not re-explore it. Inputs of record:
+Source material for `/speckit.specify`, consolidated 2026-06-12 from the Feature 002 record
+and refreshed 2026-06-13 after the local GradeBot baseline rerun. Transcribe decided
+content; do not re-explore it. Inputs of record:
 `docs/sprint-01/SPEC.md` (section 6 matrix semantics are binding),
 `docs/sprint-01/BACKLOG.md` (Feature 003 entry and exit criterion),
 `specs/002-workflow-runner/acceptance-evidence.md` and `exit-notes.md` (carried items),
+`runs/gradebot-t2/20260613-123418-6a8fb0/` (local, gitignored rerun archive: two
+interrupt/resume boundaries, zero recomputation, aggregate agreement reproduced),
 DEMA-LLM's TDD Epic 0.3 (`/Volumes/Casa/dev/dema-llm/docs/tdd/`, the consumer's own
 specification of this runner).
 
@@ -42,7 +45,9 @@ roadmap). The twc-bridge composition pass is Feature 004.
   score instability. The consumer already practices this by hand - the archived T2 (1.7%)
   and T1 (17.5% pre-prompt-hardening) numbers are the existing evidence and the validation
   target (Pipyer's measurement of an identical re-run pair should land near the archived
-  floor on the same corpus/model).
+  floor on the same corpus/model). The 2026-06-13 GradeBot rerun reproduced the aggregate
+  agreement block exactly while row-level disagreements shifted, so `pipyer compare` must
+  report both summary-level stability and per-unit diffs.
 - R25's named exception comes due, conditionally: DEMA's large matrix runs are the
   documented puller for an in-run `retry:` settings block (explicit, bounded, recorded -
   never a hardcoded default). Pull it only if the acceptance experiments actually demand it;
@@ -74,6 +79,12 @@ roadmap). The twc-bridge composition pass is Feature 004.
   (declared `summary_*` outputs and per-unit result diffs), cost, latency; stability mode
   for identical re-runs; output as markdown + JSON (the comparison is itself evidence and
   should be derivable from the two event logs alone, like the summary).
+- Comparison is over logical runs reconstructed from the full event log, not just the final
+  invocation's terminal totals. Resumed runs, interrupted segments, hash-skipped units,
+  failed carryover, and recomputed units are part of the compared evidence.
+- File outputs need portable paths in comparison/archive records: raw run records may carry
+  absolute execution-time paths, but user-facing comparison output should prefer run-relative
+  or archive-stable paths and must not depend on stale staging directories.
 - Cost aggregation by matrix dimension in the run summary.
 - Whether the in-run `retry:` block is pulled (see binding inputs; consumer-demand test).
 - Spend discipline carried forward: stub for conformance; live calls only in the acceptance
@@ -91,7 +102,8 @@ Pipyer's records; Pipyer does not become the statistics package).
 ## 5. The Acceptance Experiments
 
 Two legs, cheap rehearsal first, consumer exit second - both producing decision-grade
-comparison records, both gated (section 6).
+comparison records, both gated (section 6). GradeBot is the rehearsal and regression
+harness with known ground truth; DEMA is the consumer exit criterion.
 
 ### 5a. Rehearsal: the fall model-upgrade question (GradeBot matrix)
 
@@ -101,9 +113,11 @@ The question Feature 002 left ready-made: should fall grading move off the pinne
 mechanism doing the binding, everything else identical. The comparison record reports
 per-model agreement against the archived baselines (reusing the workflow's own domain
 comparison), cost, and latency side by side. Same PII discipline as 002 (corpus by absolute
-path, outputs external). Spend: roughly 2× the 002 run (~$4-8 depending on the candidate).
-This leg exercises matrix execution, per-cell records, dimension cost aggregation, and
-`pipyer compare` end to end with known ground truth.
+path, outputs external). Spend: the pinned baseline cell has measured around $1.6-$1.7
+for a full logical run; a two-model matrix is one baseline cell plus one candidate cell,
+budgeted explicitly before live execution. This leg exercises matrix execution, per-cell
+records, dimension cost aggregation, and `pipyer compare` end to end with known ground
+truth.
 
 ### 5b. Consumer exit (backlog criterion): a real DEMA experiment from one workflow file
 
