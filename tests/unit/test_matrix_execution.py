@@ -162,6 +162,35 @@ def test_compare_cells_writes_artifacts_and_json_stdout(tmp_path):
     assert (comparison_dirs[0] / "comparison.json").is_file()
 
 
+def test_compare_archive_run_dir_metadata_is_stable(tmp_path):
+    results_dir = tmp_path / "runs"
+    wf = _write_echo_workflow(tmp_path, results_dir=results_dir)
+    run = run_workflow(wf, results_dir=results_dir)
+    archive_run = tmp_path / "archive" / "artifacts" / "run"
+    archive_run.parent.mkdir(parents=True)
+    run.run_dir.rename(archive_run)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "compare",
+            str(archive_run),
+            "--results-dir",
+            str(results_dir),
+            "--left-cell-index",
+            "0",
+            "--right-cell-index",
+            "1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    record = json.loads(result.output)
+    assert record["left"]["run_dir"] == "artifacts/run"
+    assert record["right"]["run_dir"] == "artifacts/run"
+
+
 def test_compare_param_selector_errors_on_duplicate_cells(tmp_path):
     results_dir = tmp_path / "runs"
     wf = _write_echo_workflow(tmp_path, matrix_values=["same", "same"], results_dir=results_dir)

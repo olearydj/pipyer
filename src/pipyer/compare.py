@@ -247,13 +247,23 @@ def _build_record(
 def _side_meta(view: dict[str, Any]) -> dict[str, Any]:
     return {
         "run_id": view["run_id"],
-        "run_dir": view["run_dir"],
+        "run_dir": _stable_run_dir(view["run_dir"], view["run_id"]),
         "workflow_name": view["workflow_name"],
         "workflow_hash": view["workflow_hash"],
         "cell_index": view["cell_index"],
         "matrix": view["matrix"],
         "counts": view["counts"],
     }
+
+
+def _stable_run_dir(run_dir: str, run_id: str) -> str:
+    """Archive-stable run reference for persisted comparison metadata."""
+    path = Path(run_dir)
+    if path.name == run_id:
+        return run_id
+    if path.name == "run" and path.parent.name == "artifacts":
+        return "artifacts/run"
+    return run_dir
 
 
 def _cost(events: list[dict[str, Any]]) -> dict[str, Any]:
