@@ -82,6 +82,24 @@ copy_if_present() {
   fi
 }
 
+latest_run_dir() {
+  find "$RESULTS_DIR" -mindepth 1 -maxdepth 1 -type d | sort | tail -1
+}
+
+run_record_status() {
+  local run_dir="$1"
+  if [[ -z "$run_dir" || ! -f "$run_dir/run.json" ]]; then
+    return 1
+  fi
+  uv run python - "$run_dir/run.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+print(json.loads(Path(sys.argv[1]).read_text()).get("status", ""))
+PY
+}
+
 YES=0
 DO_DRY_RUN=1
 AUTO_RESUME=0
@@ -233,6 +251,25 @@ while true; do
 
   run_logged "live run invocation $INVOCATION" "${CMD[@]}"
 
+  CURRENT_RUN_DIR="$(latest_run_dir)"
+  RUN_RECORD_STATUS="$(run_record_status "$CURRENT_RUN_DIR" 2>/dev/null || true)"
+  if [[ -n "$RUN_RECORD_STATUS" ]]; then
+    printf "Run record status: %s\n" "$RUN_RECORD_STATUS" | tee -a "$TRANSCRIPT_LOG"
+    printf "Run record status: %s\n" "$RUN_RECORD_STATUS" >> "$COMMANDS_MD"
+  fi
+
+  if [[ "$RUN_RECORD_STATUS" == "interrupted" ]]; then
+    if [[ "$AUTO_RESUME" -eq 1 ]] || confirm "Run was interrupted. Resume now"; then
+      RESUME_ARGS=(--resume last)
+      if [[ "$RETRY_FAILED_ON_RESUME" -eq 1 ]]; then
+        RESUME_ARGS+=(--retry-failed)
+      fi
+      INVOCATION=$((INVOCATION + 1))
+      continue
+    fi
+    break
+  fi
+
   case "$LAST_STATUS" in
     0|1)
       break
@@ -255,7 +292,7 @@ while true; do
   esac
 done
 
-RUN_DIR="$(find "$RESULTS_DIR" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
+RUN_DIR="$(latest_run_dir)"
 if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/run.json" ]]; then
   printf "No completed Pipyer run directory found under %s\n" "$RESULTS_DIR" >&2
   printf "Partial archive remains at %s\n" "$PENDING_DIR" >&2
