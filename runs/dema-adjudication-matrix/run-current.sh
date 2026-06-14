@@ -310,6 +310,15 @@ PY
   exit 0
 fi
 
+{
+  printf "\n## Provider Credential Check\n\n"
+  printf -- "- Routes: \`%s\`\n" "$ROUTES_JOINED"
+} >> "$COMMANDS_MD"
+if ! check_provider_env 2>&1 | tee -a "$TRANSCRIPT_LOG"; then
+  printf "Provider credential check failed; partial archive remains at %s\n" "$PENDING_DIR" >&2
+  exit 2
+fi
+
 RESUME_ARGS=()
 INVOCATION=1
 while true; do

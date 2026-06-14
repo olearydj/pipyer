@@ -131,6 +131,62 @@ else:
 PY
 }
 
+check_provider_env() {
+  uv run python - "$DEMA_REPO/router.yaml" "$ROUTES_JOINED" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+import yaml
+
+router_path = Path(sys.argv[1])
+routes = [part for part in sys.argv[2].split(",") if part]
+data = yaml.safe_load(router_path.read_text(encoding="utf-8")) or {}
+aliases = data.get("model_aliases") or {}
+per_alias = data.get("per_alias_params") or {}
+
+def infer_provider(target: str | None) -> str:
+    if not target:
+        return "unknown"
+    if target.startswith("openai/"):
+        return "openai"
+    if target.startswith("anthropic/"):
+        return "anthropic"
+    if target.startswith("ollama/"):
+        return "ollama"
+    return "unknown"
+
+provider_env = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+missing: list[tuple[str, str, str]] = []
+checked: list[tuple[str, str, str | None]] = []
+for route in routes:
+    target = aliases.get(route)
+    overrides = per_alias.get(route) or {}
+    provider = str(overrides.get("provider_kind") or infer_provider(str(target) if target else None))
+    env_name = provider_env.get(provider)
+    checked.append((route, provider, env_name))
+    if env_name and not os.getenv(env_name):
+        missing.append((route, provider, env_name))
+
+if missing:
+    print("DEMA provider credential check failed:")
+    for route, provider, env_name in missing:
+        print(f"  - {route} resolves to provider {provider}; missing {env_name}")
+    print("Export the missing key(s), or change ROUTE_MATRIX.")
+    raise SystemExit(2)
+
+print("DEMA provider credential check OK:")
+for route, provider, env_name in checked:
+    if env_name:
+        print(f"  - {route}: {provider} via {env_name}=set")
+    else:
+        print(f"  - {route}: {provider} needs no checked API key")
+PY
+}
+
 copy_repo_evidence() {
   mkdir -p "$INPUTS_DIR/current-worktree" "$INPUTS_DIR/repo" "$INPUTS_DIR/source-docs"
   cp -R workflows/dema-adjudication-matrix "$INPUTS_DIR/current-worktree/dema-adjudication-matrix"

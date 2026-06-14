@@ -100,7 +100,9 @@ def run_adjudicate(inputs: dict[str, Any]) -> dict[str, Any]:
         str(inputs["seed"]),
     ]
     proc = run(cmd, cwd=dema_repo)
-    return stage_record(
+    pair_count = count_jsonl(Path(inputs["pairs_path"]))
+    decision_count = count_jsonl(decisions_path)
+    record = stage_record(
         "adjudicate",
         inputs,
         cmd,
@@ -109,11 +111,20 @@ def run_adjudicate(inputs: dict[str, Any]) -> dict[str, Any]:
             "decisions_path": str(decisions_path),
             "review_journal_path": str(review_path),
             "log_path": str(log_path),
-            "decision_count": count_jsonl(decisions_path),
+            "pair_count": pair_count,
+            "decision_count": decision_count,
             "review_count": count_jsonl(review_path),
             "artifacts": artifact_map(cell_dir),
         },
     )
+    if decision_count != pair_count:
+        record["validation_error"] = (
+            f"DEMA adjudicate wrote {decision_count} decisions for {pair_count} input pairs"
+        )
+        emit(record)
+        print(record["validation_error"], file=sys.stderr)
+        raise SystemExit(1)
+    return record
 
 
 def run_cluster(inputs: dict[str, Any]) -> dict[str, Any]:

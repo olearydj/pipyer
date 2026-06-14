@@ -28,6 +28,16 @@ The DEMA repository defaults to `/Volumes/Casa/dev/dema-llm`. Override it with
 `DEMA_REPO` if needed. The script prompts before live spend unless `--yes` is
 supplied.
 
+Live route aliases are resolved through DEMA's `router.yaml` before provider
+calls. The harness fails early if a selected route needs a missing API key, for
+example `OPENAI_API_KEY` for `openai/*` aliases or `ANTHROPIC_API_KEY` for
+`anthropic/*` aliases.
+
+After each DEMA adjudication command, the wrapper verifies that DEMA wrote one
+decision per input pair. If provider calls all fail but DEMA exits zero, Pipyer
+now records that adjudication step as failed instead of comparing empty decision
+files.
+
 ## DEMA Dependency Lock
 
 The workflow is pinned to the DEMA commit recorded in
