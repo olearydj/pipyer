@@ -1,9 +1,9 @@
 # Sprint 03 Acceptance Evidence
 
-This note records the GradeBot rehearsal leg for Sprint 03 matrix execution and
-run comparison. The raw archives are local and gitignored because they may
-contain closed-course outputs and student identifiers; this document keeps only
-aggregate, decision-grade facts.
+This note records the GradeBot rehearsal leg and DEMA acceptance leg for Sprint
+03 matrix execution and run comparison. The raw archives are local and
+gitignored because they may contain closed-course outputs, student identifiers,
+or provider logs; this document keeps only aggregate, decision-grade facts.
 
 ## GradeBot T2 Matrix Rehearsal
 
@@ -73,7 +73,7 @@ Cost and latency deltas from `pipyer compare`:
 | Estimated cost | `$0.026964` |
 | Latency | +66511 ms |
 
-## Decision
+## GradeBot Decision
 
 The matrix machinery is validated by this rehearsal: both cells completed in one logical
 run, per-cell failure budgets behaved correctly, matrix cost aggregation appeared in the
@@ -85,6 +85,68 @@ pinned `claude-sonnet-4-5-20250929` on the basis of this corpus. The candidate i
 slightly more expensive, but it has materially worse agreement against both baselines and
 nearly doubles the unexplained rate.
 
+## DEMA Matrix Acceptance
+
+Archive:
+
+- Local archive: `runs/dema-adjudication-matrix/20260614-150009-07db9e/`
+- Raw run: `runs/dema-adjudication-matrix/20260614-150009-07db9e/artifacts/run/`
+- Comparison artifacts:
+  `runs/dema-adjudication-matrix/20260614-150009-07db9e/artifacts/comparison/cell0-vs-cell1/`,
+  `runs/dema-adjudication-matrix/20260614-150009-07db9e/artifacts/comparison/cell0-vs-cell2/`,
+  and
+  `runs/dema-adjudication-matrix/20260614-150009-07db9e/artifacts/comparison/cell0-vs-cell3/`
+- Run ID: `20260614-150009-07db9e`
+- Workflow: `dema_adjudication_matrix`
+- Workflow hash: `sha256:07db9ee299c2ac62eaaa715729a66a519d7380617be65ce4f344d164478bb08a`
+- DEMA dependency lock: `01dec45711c1db06b4b6b2f7fde3cf78870bc22d`
+
+Matrix cells:
+
+| Cell | Adjudicator route | Confidence threshold |
+|------|-------------------|----------------------|
+| `cell[0]` | `adjudicator_openai` | `0.6` |
+| `cell[1]` | `adjudicator_openai` | `0.7` |
+| `cell[2]` | `adjudicator_claude` | `0.6` |
+| `cell[3]` | `adjudicator_claude` | `0.7` |
+
+Run totals:
+
+| Status | Attempted | Succeeded | Failed | Skipped | Not attempted |
+|--------|-----------|-----------|--------|---------|---------------|
+| completed | 16 | 16 | 0 | 0 | 0 |
+
+Per-cell metrics:
+
+| Cell | Model | Coverage | Abstain rate | Precision | Recall | Cost total | Latency p95 ms |
+|------|-------|----------|--------------|-----------|--------|------------|----------------|
+| `cell[0]` | `openai/gpt-4o-mini` | 1.0000 | 0.0000 | 0.0714 | 1.0000 | n/a | 7179.5 |
+| `cell[1]` | `openai/gpt-4o-mini` | 1.0000 | 0.0000 | 0.0714 | 1.0000 | n/a | 6377.25 |
+| `cell[2]` | `anthropic/claude-sonnet-4-6` | 0.9375 | 0.0625 | 0.0667 | 1.0000 | `$0.161952` | 14007.0 |
+| `cell[3]` | `anthropic/claude-sonnet-4-6` | 0.9375 | 0.0625 | 0.0667 | 1.0000 | `$0.153354` | 11314.0 |
+
+Decision-path evidence:
+
+| Cell group | Decisions | Abstains | Adjudication errors | Decision paths |
+|------------|-----------|----------|---------------------|----------------|
+| OpenAI threshold cells | 16 per cell | 0 per cell | 0 | `chat+schema` |
+| Claude `0.6` cell | 16 | 1 | 0 | `tool_call` 14, `tool_call+repair` 1, `tool_call+repair+abstain` 1 |
+| Claude `0.7` cell | 16 | 1 | 0 | `tool_call` 15, `tool_call+repair+abstain` 1 |
+
+## DEMA Decision
+
+The DEMA acceptance leg validates the Sprint 03 target beyond the GradeBot
+rehearsal: Pipyer expanded a four-cell matrix over two adjudicator routes and
+two thresholds, preserved cell-local outputs, completed all downstream steps,
+and produced archive-stable comparison artifacts for every requested baseline
+comparison.
+
+The run also exercised the DEMA bridge's fail-closed provider-output handling.
+Claude returned malformed tool output for one pair; DEMA repaired or converted
+that case into a counted `ABSTAIN` rather than dropping the pair. That produced
+one decision per input pair, zero adjudication errors, and explicit
+`tool_call+repair+abstain` evidence in the logs.
+
 ## Supporting Local Evidence
 
 The current local evidence set retained under `runs/gradebot-t2-matrix/`:
@@ -95,5 +157,14 @@ The current local evidence set retained under `runs/gradebot-t2-matrix/`:
 - `preflight-20260613-215733/`: dry-run-only preflight of the live matrix workflow,
   recording `live_run_launched: false`.
 - `20260613-220206-12e3eb/`: completed live matrix archive.
+
+The current local evidence set retained under `runs/dema-adjudication-matrix/`
+includes:
+
+- `preflight-20260614-145851/`: dry-run-only preflight of the locked DEMA matrix
+  workflow after the final fail-closed DEMA fix.
+- `smoke-20260614-145902-ac114d/`: zero-spend smoke run over duplicate local
+  DEMA cells, including compare artifact generation.
+- `20260614-150009-07db9e/`: completed live four-cell DEMA matrix archive.
 
 These directories remain intentionally gitignored.
