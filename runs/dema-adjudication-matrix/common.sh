@@ -280,10 +280,14 @@ PY
 
 write_dema_archive_metadata() {
   uv run python - "$ARCHIVE_DIR" "$ARTIFACT_RUN" "$START_ISO" "$CREATED_BY" <<'PY'
+import hashlib
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
+
+import yaml
 
 archive = Path(sys.argv[1])
 run_dir = Path(sys.argv[2])
@@ -318,6 +322,203 @@ output_files = [
     path for path in (run_dir / "outputs").rglob("*") if path.is_file()
 ] if (run_dir / "outputs").exists() else []
 
+def rel(path: Path) -> str:
+    return path.relative_to(archive).as_posix()
+
+
+def sha256_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def sha256_json(value) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def file_digest(path: Path) -> dict[str, str] | None:
+    if not path.is_file():
+        return None
+    return {"path": rel(path), "sha256": sha256_file(path)}
+
+
+def infer_provider(model: str | None) -> str:
+    if not model or "/" not in model:
+        return "unknown"
+    return model.split("/", 1)[0]
+
+
+def pinning_assessment(provider: str, requested_model: str | None) -> dict[str, str]:
+    model = (requested_model or "").split("/", 1)[-1]
+    if not requested_model:
+        return {"status": "unknown", "reason": "route does not resolve to a model id"}
+    if provider == "stub":
+        return {"status": "deterministic_stub", "reason": "local test route; no provider model"}
+    if provider == "anthropic":
+        if model.endswith("-latest"):
+            return {"status": "floating", "reason": "Anthropic latest alias"}
+        if re.search(r"-\d{8}$", model):
+            return {"status": "pinned", "reason": "dated Anthropic snapshot id"}
+        if re.fullmatch(r"claude-(opus|sonnet|haiku)-\d+-\d+", model):
+            return {"status": "pinned", "reason": "Anthropic 4.6+ canonical snapshot id pattern"}
+        return {"status": "unverified", "reason": "not recognized as a pinned Anthropic id"}
+    if provider == "openai":
+        if model.endswith("latest") or "preview" in model:
+            return {"status": "floating", "reason": "OpenAI latest/preview alias"}
+        if re.search(r"-\d{4}-\d{2}-\d{2}$", model):
+            return {"status": "pinned", "reason": "dated OpenAI snapshot id pattern"}
+        return {
+            "status": "not_proven_pinned",
+            "reason": "OpenAI dateless id; current docs do not prove this is a fixed snapshot",
+        }
+    if provider == "ollama":
+        return {
+            "status": "local_reference_only",
+            "reason": "local model name without artifact digest/runtime/quantization capture",
+        }
+    return {"status": "unknown", "reason": f"no pinning policy for provider {provider!r}"}
+
+
+def load_router() -> dict:
+    path = archive / "inputs/dema/repo/router.yaml"
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def route_provenance(router: dict, route: str) -> dict:
+    aliases = router.get("model_aliases") or {}
+    per_alias = router.get("per_alias_params") or {}
+    requested_model = aliases.get(route)
+    override = per_alias.get(route) or {}
+    provider = str(override.get("provider_kind") or infer_provider(str(requested_model) if requested_model else None))
+    defaults = {
+        key: router[key]
+        for key in ("timeout", "temperature", "max_tokens", "retries")
+        if key in router
+    }
+    effective = {**defaults, **override}
+    return {
+        "provider": provider,
+        "requested_model": requested_model,
+        "pinning": pinning_assessment(provider, str(requested_model) if requested_model else None),
+        "effective_params": effective,
+    }
+
+
+def archived_log_path(log_path: str | None) -> Path | None:
+    if not log_path:
+        return None
+    parts = Path(log_path).parts
+    for index in range(len(parts) - 1):
+        if parts[index] == "artifacts" and parts[index + 1] == "dema":
+            candidate = archive.joinpath(*parts[index:])
+            if candidate.exists():
+                return candidate
+    return None
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            records.append({"_decode_error": line})
+    return records
+
+
+def sorted_unique(values) -> list:
+    return sorted({value for value in values if value is not None})
+
+
+def log_provenance(path: Path | None) -> dict | None:
+    if path is None or not path.exists():
+        return None
+    records = read_jsonl(path)
+    events_seen = Counter(record.get("event", "_missing_event") for record in records)
+    prompt_hashes = sorted_unique(record.get("prompt_hash") for record in records)
+    payload_hashes = sorted_unique(record.get("payload_hash") for record in records)
+    errors = [record.get("error") for record in records if record.get("error")]
+    return {
+        "log_path": rel(path),
+        "log_sha256": sha256_file(path),
+        "event_counts": dict(sorted(events_seen.items())),
+        "observed_model_names": sorted_unique(record.get("model_name") for record in records),
+        "observed_model_versions": sorted_unique(record.get("model_version") for record in records),
+        "system_fingerprints": sorted_unique(record.get("system_fingerprint") for record in records),
+        "temperatures": sorted_unique(record.get("temperature") for record in records),
+        "max_tokens": sorted_unique(record.get("max_tokens") for record in records),
+        "schema_versions": sorted_unique(record.get("schema_version") for record in records),
+        "router_hashes": sorted_unique(record.get("router_hash") for record in records),
+        "prompt_hash_count": len(prompt_hashes),
+        "prompt_hashes_digest": sha256_json(prompt_hashes) if prompt_hashes else None,
+        "payload_hash_count": len(payload_hashes),
+        "payload_hashes_digest": sha256_json(payload_hashes) if payload_hashes else None,
+        "error_count": len(errors),
+        "error_digest": sha256_json(errors) if errors else None,
+    }
+
+
+router = load_router()
+matrix_routes = sorted(
+    {
+        params.get("adjudicator_route")
+        for params in cells.values()
+        if params.get("adjudicator_route")
+    }
+)
+routes = {route: route_provenance(router, route) for route in matrix_routes}
+cell_model_provenance = {}
+for event in events:
+    if event.get("event") != "step_result" or event.get("step") != "adjudicate":
+        continue
+    cell_index = event.get("cell_index")
+    if cell_index is None:
+        continue
+    matrix = event.get("matrix") or {}
+    output = event.get("output") or {}
+    stdout = output.get("stdout") or {}
+    route = matrix.get("adjudicator_route")
+    cell_model_provenance[f"cell[{cell_index}]"] = {
+        "matrix": matrix,
+        "route": route,
+        "route_provenance": routes.get(route),
+        "step_status": event.get("status"),
+        "observed_adjudication": log_provenance(archived_log_path(stdout.get("log_path"))),
+    }
+
+source_file_digests = {
+    "pipyer_workflow": file_digest(archive / "workflows/dema-adjudication-matrix/workflow.yaml"),
+    "pipyer_workflow_snapshot": file_digest(
+        archive / "inputs/current-worktree/dema-adjudication-matrix/workflow.yaml"
+    ),
+    "pipyer_stage_script": file_digest(
+        archive / "inputs/current-worktree/dema-adjudication-matrix/scripts/dema_stage.py"
+    ),
+    "dema_dependency_lock": file_digest(
+        archive / "inputs/current-worktree/dema-adjudication-matrix/dema.lock.json"
+    ),
+    "pipyer_uv_lock": file_digest(archive / "inputs/repo/uv.lock"),
+    "dema_router": file_digest(archive / "inputs/dema/repo/router.yaml"),
+    "dema_pyproject": file_digest(archive / "inputs/dema/repo/pyproject.toml"),
+    "dema_uv_lock": file_digest(archive / "inputs/dema/repo/uv.lock"),
+    "dema_elements": file_digest(archive / "inputs/dema/data/elements.csv"),
+    "dema_vessels": file_digest(archive / "inputs/dema/data/vessels.csv"),
+    "dema_relations": file_digest(archive / "inputs/dema/data/relations.csv"),
+    "gold_pairs": file_digest(
+        archive / "inputs/current-worktree/dema-adjudication-matrix/fixtures/gold_pairs.triage-t04.jsonl"
+    ),
+}
+source_file_digests = {
+    key: value for key, value in source_file_digests.items() if value is not None
+}
+
 manifest = {
     "archive_schema": "pipyer-dema-matrix-archive-v0",
     "created_at": created_at,
@@ -328,6 +529,19 @@ manifest = {
     "local_run_dir": "artifacts/run",
     "matrix_cells": {f"cell[{index}]": params for index, params in sorted(cells.items())},
     "eval_metrics": eval_metrics,
+    "model_provenance": {
+        "policy": {
+            "summary": "Best-effort provenance for provider-backed DEMA bridge runs.",
+            "limits": [
+                "Provider backend state is not frozen by this archive.",
+                "OpenAI dateless model ids are not treated as proven pinned unless documented separately.",
+                "Local/open model routes still require artifact digest, runtime, quantization, and sampler capture.",
+            ],
+        },
+        "routes": routes,
+        "cells": cell_model_provenance,
+    },
+    "source_file_digests": source_file_digests,
     "retained_artifacts": {
         "event_log": "artifacts/run/events.jsonl",
         "run_record": "artifacts/run/run.json",
@@ -411,6 +625,8 @@ Generated {created_at} by `{created_by}`.
 - Final status: `{run_record.get('status')}`
 - Event counts: `{dict(sorted(counts.items()))}`
 - Matrix cells: `{manifest['matrix_cells']}`
+- Model provenance: see `manifest.json` keys `model_provenance` and
+  `source_file_digests`.
 - DEMA artifact files: `{len(dema_files)}`
 
 ## Contents

@@ -63,7 +63,7 @@ Each archive keeps:
 - `artifacts/dema/`: DEMA side-effect outputs produced by the workflow wrapper.
 - `artifacts/comparison/`: `pipyer compare` outputs.
 - `commands.md` and `transcript.log`: exact commands and captured output.
-- `manifest.json`: machine-readable provenance, matrix cells, event counts, and
-  DEMA eval metrics.
+- `manifest.json`: machine-readable provenance, matrix cells, event counts,
+  DEMA eval metrics, model provenance, and source-file digests.
 - `inputs/`: Pipyer workflow source, Pipyer Git state, and DEMA Git/input
   snapshots used by the run.
