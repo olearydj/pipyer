@@ -34,6 +34,12 @@ runs/gradebot-t2-matrix/*
 !runs/gradebot-t2-matrix/compare-existing.sh
 !runs/gradebot-t2-matrix/smoke-current.sh
 !runs/gradebot-t2-matrix/run-current.sh
+!runs/dema-adjudication-matrix/
+runs/dema-adjudication-matrix/*
+!runs/dema-adjudication-matrix/README.md
+!runs/dema-adjudication-matrix/common.sh
+!runs/dema-adjudication-matrix/smoke-current.sh
+!runs/dema-adjudication-matrix/run-current.sh
 
 # Spike scratch output (evidence summarized into the spike report; raw output disposable)
 spike/results/

@@ -1,0 +1,211 @@
+schema_version: "2"
+name: dema_adjudication_matrix
+description: Run a reproducible DEMA triage/adjudicate/cluster/eval matrix over the committed DEMA fixture.
+
+inputs:
+  dema_repo:
+    type: path
+    required: false
+    default: /Volumes/Casa/dev/dema-llm
+    description: Local DEMA repository containing router.yaml, data inputs, and the dema-llm CLI.
+  output_root:
+    type: path
+    required: false
+    default: ../../runs/dema-adjudication-matrix/.manual-dema-artifacts
+    description: Directory where DEMA side-effect artifacts are written and later archived by run scripts.
+  elements_csv:
+    type: path
+    required: false
+    default: data/elements.csv
+    description: DEMA elements CSV, relative to dema_repo unless absolute.
+  vessels_csv:
+    type: path
+    required: false
+    default: data/vessels.csv
+    description: DEMA vessels CSV, relative to dema_repo unless absolute.
+  relations_csv:
+    type: path
+    required: false
+    default: data/relations.csv
+    description: DEMA relations CSV, relative to dema_repo unless absolute.
+  gold_pairs:
+    type: path
+    required: false
+    default: fixtures/gold_pairs.triage-t04.jsonl
+    description: Gold labels for the deterministic triage fixture, relative to this workflow.
+  max_pairs:
+    type: number
+    required: false
+    default: 16
+    description: Candidate-pair cap for deterministic triage.
+  seed:
+    type: number
+    required: false
+    default: 0
+    description: Deterministic seed passed to DEMA triage and adjudication.
+  triage_t_string:
+    type: number
+    required: false
+    default: 0.4
+    description: String-similarity threshold selected to regenerate the committed gold fixture.
+  triage_t_embed:
+    type: number
+    required: false
+    default: 0.75
+    description: Embedding-similarity threshold, retained for reproducibility even when embeddings are disabled.
+  triage_use_embed:
+    type: string
+    required: false
+    default: none
+    description: DEMA embedding route for triage; default keeps smoke runs zero-spend.
+  triage_top_k:
+    type: number
+    required: false
+    default: 5
+    description: Maximum occurrences per side in triage output.
+  match_semantic:
+    type: boolean
+    required: false
+    default: true
+    description: Whether DEMA triage requires semantic-type matches.
+  cluster_next_k:
+    type: number
+    required: false
+    default: 50
+    description: Number of next-pair suggestions from DEMA clustering.
+  cluster_tau_merge:
+    type: number
+    required: false
+    default: 0.75
+    description: Cluster merge threshold.
+  cluster_tau_keep:
+    type: number
+    required: false
+    default: 0.60
+    description: Cluster keep threshold.
+  cluster_tau_cross_vessel:
+    type: number
+    required: false
+    default: 0.85
+    description: Cross-vessel cluster merge threshold.
+  cluster_alpha_actor:
+    type: number
+    required: false
+    default: 0.50
+    description: Actor-overlap threshold for cross-vessel merges.
+  cluster_delta_row:
+    type: number
+    required: false
+    default: 1
+    description: Row-proximity threshold for cluster evidence.
+
+matrix:
+  adjudicator_route:
+    - adjudicator_openai
+    - adjudicator_claude
+  confidence_threshold:
+    - 0.6
+    - 0.7
+
+steps:
+  - name: triage
+    component: shell
+    config:
+      command:
+        - uv
+        - run
+        - python
+        - scripts/dema_stage.py
+        - triage
+      parse_stdout: json
+      timeout_s: 180
+    inputs:
+      dema_repo: inputs.dema_repo
+      output_root: inputs.output_root
+      elements_csv: inputs.elements_csv
+      vessels_csv: inputs.vessels_csv
+      relations_csv: inputs.relations_csv
+      max_pairs: inputs.max_pairs
+      seed: inputs.seed
+      triage_t_string: inputs.triage_t_string
+      triage_t_embed: inputs.triage_t_embed
+      triage_use_embed: inputs.triage_use_embed
+      triage_top_k: inputs.triage_top_k
+      match_semantic: inputs.match_semantic
+      adjudicator_route: matrix.adjudicator_route
+      confidence_threshold: matrix.confidence_threshold
+
+  - name: adjudicate
+    component: shell
+    config:
+      command:
+        - uv
+        - run
+        - python
+        - scripts/dema_stage.py
+        - adjudicate
+      parse_stdout: json
+      timeout_s: 900
+    inputs:
+      dema_repo: inputs.dema_repo
+      output_root: inputs.output_root
+      pairs_path: steps.triage.stdout.pairs_path
+      seed: inputs.seed
+      adjudicator_route: matrix.adjudicator_route
+      confidence_threshold: matrix.confidence_threshold
+
+  - name: cluster
+    component: shell
+    config:
+      command:
+        - uv
+        - run
+        - python
+        - scripts/dema_stage.py
+        - cluster
+      parse_stdout: json
+      timeout_s: 180
+    inputs:
+      dema_repo: inputs.dema_repo
+      output_root: inputs.output_root
+      pairs_path: steps.triage.stdout.pairs_path
+      decisions_path: steps.adjudicate.stdout.decisions_path
+      cluster_next_k: inputs.cluster_next_k
+      cluster_tau_merge: inputs.cluster_tau_merge
+      cluster_tau_keep: inputs.cluster_tau_keep
+      cluster_tau_cross_vessel: inputs.cluster_tau_cross_vessel
+      cluster_alpha_actor: inputs.cluster_alpha_actor
+      cluster_delta_row: inputs.cluster_delta_row
+      adjudicator_route: matrix.adjudicator_route
+      confidence_threshold: matrix.confidence_threshold
+
+  - name: evaluate
+    component: shell
+    config:
+      command:
+        - uv
+        - run
+        - python
+        - scripts/dema_stage.py
+        - evaluate
+      parse_stdout: json
+      timeout_s: 180
+    inputs:
+      dema_repo: inputs.dema_repo
+      output_root: inputs.output_root
+      gold_pairs: inputs.gold_pairs
+      pairs_path: steps.triage.stdout.pairs_path
+      decisions_path: steps.adjudicate.stdout.decisions_path
+      adjudicate_log_path: steps.adjudicate.stdout.log_path
+      adjudicator_route: matrix.adjudicator_route
+      confidence_threshold: matrix.confidence_threshold
+
+settings:
+  concurrency: 2
+  max_failures: 1
+  max_failure_rate: 0.5
+  results_dir: runs
+
+outputs:
+  summary_metrics: steps.evaluate.stdout.metrics
+  summary_artifacts: steps.evaluate.stdout.artifacts
