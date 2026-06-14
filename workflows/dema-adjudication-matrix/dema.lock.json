@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "repo": "/Volumes/Casa/dev/dema-llm",
-  "commit": "8075c48cc08b37f79df565c193aec2c30a122b7a",
+  "commit": "1148f915847dd31a6d580703d81cb3b96678dae0",
   "clean_required": true,
   "notes": "DEMA dependency version used to author and verify workflows/dema-adjudication-matrix."
 }
