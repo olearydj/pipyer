@@ -86,6 +86,7 @@ DEMA_REPO=$DEMA_REPO
 RESULTS_DIR=$RESULTS_DIR
 DEMA_OUTPUT_ROOT=$DEMA_OUTPUT_ROOT
 MAX_PAIRS=$MAX_PAIRS
+ALLOW_DEMA_DRIFT=${ALLOW_DEMA_DRIFT:-0}
 ROUTES=(${ROUTES[*]})
 CONFIDENCES=(${CONFIDENCES[*]})
 \`\`\`
@@ -98,6 +99,17 @@ EOF
   printf "DEMA repo: %s\n" "$DEMA_REPO"
   printf "Workflow: %s\n" "$WORKFLOW"
 } > "$TRANSCRIPT_LOG"
+
+{
+  printf "\n## DEMA Lock Check\n\n"
+  printf -- "- Lock file: \`workflows/dema-adjudication-matrix/dema.lock.json\`\n"
+  printf -- "- DEMA repo: \`%s\`\n" "$DEMA_REPO"
+  printf -- "- ALLOW_DEMA_DRIFT: \`%s\`\n" "${ALLOW_DEMA_DRIFT:-0}"
+} >> "$COMMANDS_MD"
+if ! check_dema_lock 2>&1 | tee -a "$TRANSCRIPT_LOG"; then
+  printf "DEMA lock check failed; partial archive remains at %s\n" "$PENDING_DIR" >&2
+  exit 2
+fi
 
 run_logged "validate staged DEMA matrix workflow" uv run pipyer validate "$WORKFLOW"
 if [[ "$LAST_STATUS" -ne 0 ]]; then

@@ -23,6 +23,8 @@ Environment overrides:
   CONFIDENCE_MATRIX  Comma-separated confidence thresholds.
   MAX_PAIRS          Candidate-pair cap. Defaults to 16.
   BUDGET_USD         Human-visible budget note in the confirmation prompt.
+  ALLOW_DEMA_DRIFT   Set to 1 to run against a DEMA commit/dirty tree that does
+                     not match workflows/dema-adjudication-matrix/dema.lock.json.
 USAGE
 }
 
@@ -166,6 +168,7 @@ RESULTS_DIR=$RESULTS_DIR
 DEMA_OUTPUT_ROOT=$DEMA_OUTPUT_ROOT
 MAX_PAIRS=$MAX_PAIRS
 BUDGET_USD=$BUDGET_USD
+ALLOW_DEMA_DRIFT=${ALLOW_DEMA_DRIFT:-0}
 ROUTES=(${ROUTES[*]})
 CONFIDENCES=(${CONFIDENCES[*]})
 \`\`\`
@@ -186,6 +189,17 @@ EOF
     done
   done
 } > "$TRANSCRIPT_LOG"
+
+{
+  printf "\n## DEMA Lock Check\n\n"
+  printf -- "- Lock file: \`workflows/dema-adjudication-matrix/dema.lock.json\`\n"
+  printf -- "- DEMA repo: \`%s\`\n" "$DEMA_REPO"
+  printf -- "- ALLOW_DEMA_DRIFT: \`%s\`\n" "${ALLOW_DEMA_DRIFT:-0}"
+} >> "$COMMANDS_MD"
+if ! check_dema_lock 2>&1 | tee -a "$TRANSCRIPT_LOG"; then
+  printf "DEMA lock check failed; partial archive remains at %s\n" "$PENDING_DIR" >&2
+  exit 2
+fi
 
 run_logged "validate staged DEMA matrix workflow" uv run pipyer validate "$WORKFLOW"
 if [[ "$LAST_STATUS" -ne 0 ]]; then
@@ -265,6 +279,12 @@ manifest = {
         "data": "inputs/dema/data",
     },
 }
+lock_path = archive / "inputs/current-worktree/dema-adjudication-matrix/dema.lock.json"
+if lock_path.exists():
+    try:
+        manifest["dema_lock"] = json.loads(lock_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        manifest["dema_lock"] = {"path": "inputs/current-worktree/dema-adjudication-matrix/dema.lock.json"}
 (archive / "manifest.json").write_text(
     json.dumps(manifest, indent=2, sort_keys=True) + "\n",
     encoding="utf-8",

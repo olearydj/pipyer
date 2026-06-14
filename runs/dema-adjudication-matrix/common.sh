@@ -77,6 +77,60 @@ print(json.loads(Path(sys.argv[1]).read_text()).get("run_id", "unknown-run-id"))
 PY
 }
 
+check_dema_lock() {
+  local lock_file="$REPO_ROOT/workflows/dema-adjudication-matrix/dema.lock.json"
+  uv run python - "$lock_file" "$DEMA_REPO" "${ALLOW_DEMA_DRIFT:-0}" <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+lock_path = Path(sys.argv[1])
+repo = Path(sys.argv[2])
+allow_drift = sys.argv[3].strip().lower() in {"1", "true", "yes", "y"}
+
+lock = json.loads(lock_path.read_text(encoding="utf-8"))
+expected = str(lock["commit"])
+clean_required = bool(lock.get("clean_required", True))
+
+def git(*args: str) -> str:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise SystemExit(proc.stderr.strip() or proc.stdout.strip() or f"git {' '.join(args)} failed")
+    return proc.stdout.strip()
+
+actual = git("rev-parse", "HEAD")
+dirty = git("status", "--porcelain", "--untracked-files=all")
+problems = []
+if actual != expected:
+    problems.append(f"commit mismatch: expected {expected}, actual {actual}")
+if clean_required and dirty:
+    problems.append("worktree is not clean")
+
+if problems:
+    print("DEMA lock check failed:")
+    print(f"  repo: {repo}")
+    print(f"  lock: {lock_path}")
+    for problem in problems:
+        print(f"  - {problem}")
+    if dirty:
+        print("  dirty status:")
+        for line in dirty.splitlines():
+            print(f"    {line}")
+    if allow_drift:
+        print("ALLOW_DEMA_DRIFT is set; continuing despite DEMA lock check failure.")
+    else:
+        print("Set ALLOW_DEMA_DRIFT=1 only for intentional drift experiments.")
+        raise SystemExit(2)
+else:
+    print(f"DEMA lock check OK: {actual}")
+PY
+}
+
 copy_repo_evidence() {
   mkdir -p "$INPUTS_DIR/current-worktree" "$INPUTS_DIR/repo" "$INPUTS_DIR/source-docs"
   cp -R workflows/dema-adjudication-matrix "$INPUTS_DIR/current-worktree/dema-adjudication-matrix"
@@ -248,6 +302,12 @@ manifest = {
         "totals": run_record.get("totals"),
     },
 }
+lock_path = archive / "inputs/current-worktree/dema-adjudication-matrix/dema.lock.json"
+if lock_path.exists():
+    try:
+        manifest["dema_lock"] = json.loads(lock_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        manifest["dema_lock"] = {"path": "inputs/current-worktree/dema-adjudication-matrix/dema.lock.json"}
 
 comparison_root = archive / "artifacts/comparison"
 if comparison_root.exists():

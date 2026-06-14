@@ -244,7 +244,9 @@ def output_cell_dir(inputs: dict[str, Any]) -> Path:
 def dema_cmd(dema_repo: Path, log_path: Path) -> list[str]:
     return [
         "uv",
+        "--no-config",
         "run",
+        "--locked",
         "--project",
         str(dema_repo),
         "dema-llm",
