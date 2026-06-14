@@ -29,9 +29,14 @@ The DEMA repository defaults to `/Volumes/Casa/dev/dema-llm`. Override it with
 supplied.
 
 Live route aliases are resolved through DEMA's `router.yaml` before provider
-calls. The harness fails early if a selected route needs a missing API key, for
-example `OPENAI_API_KEY` for `openai/*` aliases or `ANTHROPIC_API_KEY` for
-`anthropic/*` aliases.
+calls. The harness uses Pipyer's 1Password resolver and fails early if a
+selected route needs a missing 1Password reference, for example
+`PIPYER_OPENAI_API_KEY_OP_REFERENCE` for `openai/*` aliases or
+`PIPYER_ANTHROPIC_API_KEY_OP_REFERENCE` for `anthropic/*` aliases. The resolved
+secret is passed only as the conventional subprocess environment variable
+expected by DEMA/LiteLLM, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+Those conventional environment variables are delivery names only in this
+harness; they are not accepted as credential sources.
 
 After each DEMA adjudication command, the wrapper verifies that DEMA wrote one
 decision per input pair. If provider calls all fail but DEMA exits zero, Pipyer

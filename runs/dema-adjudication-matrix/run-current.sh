@@ -25,6 +25,9 @@ Environment overrides:
   BUDGET_USD         Human-visible budget note in the confirmation prompt.
   ALLOW_DEMA_DRIFT   Set to 1 to run against a DEMA commit/dirty tree that does
                      not match workflows/dema-adjudication-matrix/dema.lock.json.
+  PIPYER_OPENAI_API_KEY_OP_REFERENCE
+  PIPYER_ANTHROPIC_API_KEY_OP_REFERENCE
+                     1Password references used to supply DEMA provider keys.
 USAGE
 }
 

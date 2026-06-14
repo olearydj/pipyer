@@ -133,11 +133,12 @@ PY
 
 check_provider_env() {
   uv run python - "$DEMA_REPO/router.yaml" "$ROUTES_JOINED" <<'PY'
-import os
 import sys
 from pathlib import Path
 
 import yaml
+
+from pipyer.secrets import SecretResolutionError, resolve_secret
 
 router_path = Path(sys.argv[1])
 routes = [part for part in sys.argv[2].split(",") if part]
@@ -160,28 +161,34 @@ provider_env = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
 }
-missing: list[tuple[str, str, str]] = []
-checked: list[tuple[str, str, str | None]] = []
+failures: list[tuple[str, str, str, str]] = []
+checked: list[tuple[str, str, str | None, str | None]] = []
+resolved: set[str] = set()
 for route in routes:
     target = aliases.get(route)
     overrides = per_alias.get(route) or {}
     provider = str(overrides.get("provider_kind") or infer_provider(str(target) if target else None))
     env_name = provider_env.get(provider)
-    checked.append((route, provider, env_name))
-    if env_name and not os.getenv(env_name):
-        missing.append((route, provider, env_name))
+    source = None
+    if env_name:
+        try:
+            _secret, source = resolve_secret(env_name, provider="1password")
+            resolved.add(env_name)
+        except SecretResolutionError as error:
+            failures.append((route, provider, env_name, str(error)))
+    checked.append((route, provider, env_name, source))
 
-if missing:
-    print("DEMA provider credential check failed:")
-    for route, provider, env_name in missing:
-        print(f"  - {route} resolves to provider {provider}; missing {env_name}")
-    print("Export the missing key(s), or change ROUTE_MATRIX.")
+if failures:
+    print("DEMA 1Password credential check failed:")
+    for route, provider, env_name, error in failures:
+        print(f"  - {route} resolves to provider {provider}; could not resolve {env_name}: {error}")
+    print("Set PIPYER_<KEY>_OP_REFERENCE for each required key, or change ROUTE_MATRIX.")
     raise SystemExit(2)
 
-print("DEMA provider credential check OK:")
-for route, provider, env_name in checked:
-    if env_name:
-        print(f"  - {route}: {provider} via {env_name}=set")
+print("DEMA 1Password credential check OK:")
+for route, provider, env_name, source in checked:
+    if env_name and env_name in resolved:
+        print(f"  - {route}: {provider} via {env_name} from {source}")
     else:
         print(f"  - {route}: {provider} needs no checked API key")
 PY

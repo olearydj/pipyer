@@ -10,6 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from pipyer.secrets import SecretResolutionError, resolve_secret
+
 WORKFLOW_DIR = Path.cwd()
 
 
@@ -99,7 +103,7 @@ def run_adjudicate(inputs: dict[str, Any]) -> dict[str, Any]:
         "--seed",
         str(inputs["seed"]),
     ]
-    proc = run(cmd, cwd=dema_repo)
+    proc = run(cmd, cwd=dema_repo, env_overlay=provider_secret_env(dema_repo, route))
     pair_count = count_jsonl(Path(inputs["pairs_path"]))
     decision_count = count_jsonl(decisions_path)
     record = stage_record(
@@ -266,8 +270,16 @@ def dema_cmd(dema_repo: Path, log_path: Path) -> list[str]:
     ]
 
 
-def run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, env=os.environ.copy())
+def run(
+    cmd: list[str],
+    *,
+    cwd: Path,
+    env_overlay: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    if env_overlay:
+        env.update(env_overlay)
+    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, env=env)
     if proc.returncode != 0:
         if proc.stdout:
             sys.stderr.write(proc.stdout)
@@ -275,6 +287,52 @@ def run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
             sys.stderr.write(proc.stderr)
         raise SystemExit(proc.returncode)
     return proc
+
+
+def provider_secret_env(dema_repo: Path, route: str) -> dict[str, str]:
+    provider = route_provider(dema_repo, route)
+    provider_env = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+    }
+    env_name = provider_env.get(provider)
+    if env_name is None:
+        return {}
+    try:
+        secret, source = resolve_secret(env_name, provider="1password")
+    except SecretResolutionError as error:
+        print(
+            f"could not resolve {env_name} for DEMA route {route} via 1Password: {error}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from error
+    if source != "1password":
+        print(
+            f"unexpected secret provider for {env_name}: {source}; expected 1password",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return {env_name: secret}
+
+
+def route_provider(dema_repo: Path, route: str) -> str:
+    router_path = dema_repo / "router.yaml"
+    data = yaml.safe_load(router_path.read_text(encoding="utf-8")) or {}
+    aliases = data.get("model_aliases") or {}
+    per_alias = data.get("per_alias_params") or {}
+    target = aliases.get(route)
+    overrides = per_alias.get(route) or {}
+    provider = overrides.get("provider_kind")
+    if provider:
+        return str(provider)
+    target_text = str(target or "")
+    if target_text.startswith("openai/"):
+        return "openai"
+    if target_text.startswith("anthropic/"):
+        return "anthropic"
+    if target_text.startswith("ollama/"):
+        return "ollama"
+    return "unknown"
 
 
 def stage_record(
