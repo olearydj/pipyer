@@ -147,6 +147,55 @@ that case into a counted `ABSTAIN` rather than dropping the pair. That produced
 one decision per input pair, zero adjudication errors, and explicit
 `tool_call+repair+abstain` evidence in the logs.
 
+## Sprint 03 Closeout Review
+
+Reviewed against `docs/sprint-03/BRIEF.md` on 2026-06-14.
+
+Satisfied for Sprint 03:
+
+- Matrix expansion over parameters, never topology, with positional unit keys
+  such as `cell[0]/step` and `cell[0]/step[7]`.
+- `StepResult` records carry `cell_index` and `matrix`; matrix summaries are
+  emitted as per-cell output rows.
+- Existing failure budgets are cell-local in matrix runs; per-cell budget
+  breaches emit `cell_halted` and do not halt unrelated cells.
+- `cell_started` and `cell_halted` are part of the event vocabulary, while
+  `run_halted` remains the whole-run terminal halt.
+- Resume identity includes scoped resource digests for files Pipyer directly
+  opens or executes, including Python scripts, prompt/schema files, file reads,
+  and obvious shell script args.
+- `pipyer compare` reconstructs logical runs from full event logs, supports
+  run-vs-run and cell-vs-cell comparisons, supports param selectors with
+  `--left-cell-index` / `--right-cell-index` disambiguation, writes
+  `comparison.md` and `comparison.json`, supports `--json`, and normalizes
+  archive run paths where possible.
+- GradeBot and DEMA both produced local, archive-backed acceptance evidence.
+- Full Pipyer test suite passed after the acceptance run: `215 passed`.
+
+Known limitations and follow-up:
+
+- `settings.retry` was intentionally not added. Sprint 03 did not require a
+  Pipyer-level automatic retry block; the DEMA failures were handled in DEMA as
+  provider-output repair/fail-closed behavior.
+- No explicit run-wide matrix circuit breaker was added. Cell-local budgets were
+  sufficient for this sprint; add a separate `max_run_failures`-style setting
+  only if future runs need runaway protection across cells.
+- Stability mode exists in `pipyer compare`, but the acceptance evidence did not
+  include a fresh DEMA identical-rerun stability pair. GradeBot retained-run
+  comparison and the live matrix comparisons cover the product mechanics; a
+  formal stability benchmark remains future evidence work.
+- DEMA remains a CLI bridge harness. Pipyer validates matrix, archive, and
+  comparison behavior, but DEMA still owns provider calls, some cost accounting,
+  and provider-specific repair behavior.
+- Shell-driven DEMA cost appears in DEMA eval metrics and the archive manifest,
+  not as native Pipyer `StepResult.usage`. Native provider/eval ownership is the
+  cleaner long-term design.
+- Reproducibility is strong but not hermetic. Provider backend state is not
+  frozen, DEMA observed `model_version` is still `null`, and OpenAI's
+  `gpt-4o-mini` route is weaker evidence than a documented fixed snapshot.
+- Compare output is sufficient for Sprint 03 evidence, but future UX can improve
+  summary readability, domain-specific deltas, and large changed-unit browsing.
+
 ## Supporting Local Evidence
 
 The current local evidence set retained under `runs/gradebot-t2-matrix/`:
