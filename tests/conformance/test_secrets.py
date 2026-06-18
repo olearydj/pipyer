@@ -34,42 +34,42 @@ def test_auto_falls_back_to_env_when_op_reference_unset(monkeypatch):
 
 def test_1password_leg_reads_op_reference(monkeypatch):
     monkeypatch.setenv("PIPYER_TESTKEY_OP_REFERENCE", "op://vault/item/field")
-    monkeypatch.setattr(secrets_mod.shutil, "which", lambda _: "/usr/local/bin/op")
+    monkeypatch.setattr("secretpath.core.shutil.which", lambda _: "/usr/local/bin/op")
 
     class Proc:
         returncode = 0
         stdout = "from-op\n"
         stderr = ""
 
-    monkeypatch.setattr(secrets_mod.subprocess, "run", lambda *a, **k: Proc())
+    monkeypatch.setattr("secretpath.core.subprocess.run", lambda *a, **k: Proc())
     assert resolve_secret("TESTKEY") == ("from-op", "1password")
 
 
 def test_auto_prefers_1password_over_env(monkeypatch):
     monkeypatch.setenv("TESTKEY", "from-env")
     monkeypatch.setenv("PIPYER_TESTKEY_OP_REFERENCE", "op://vault/item/field")
-    monkeypatch.setattr(secrets_mod.shutil, "which", lambda _: "/usr/local/bin/op")
+    monkeypatch.setattr("secretpath.core.shutil.which", lambda _: "/usr/local/bin/op")
 
     class Proc:
         returncode = 0
         stdout = "from-op"
         stderr = ""
 
-    monkeypatch.setattr(secrets_mod.subprocess, "run", lambda *a, **k: Proc())
+    monkeypatch.setattr("secretpath.core.subprocess.run", lambda *a, **k: Proc())
     assert resolve_secret("TESTKEY") == ("from-op", "1password")
 
 
 def test_op_failure_falls_through_to_env_under_auto(monkeypatch):
     monkeypatch.setenv("TESTKEY", "from-env")
     monkeypatch.setenv("PIPYER_TESTKEY_OP_REFERENCE", "op://vault/item/field")
-    monkeypatch.setattr(secrets_mod.shutil, "which", lambda _: "/usr/local/bin/op")
+    monkeypatch.setattr("secretpath.core.shutil.which", lambda _: "/usr/local/bin/op")
 
     class Proc:
         returncode = 1
         stdout = ""
         stderr = "op: not signed in"
 
-    monkeypatch.setattr(secrets_mod.subprocess, "run", lambda *a, **k: Proc())
+    monkeypatch.setattr("secretpath.core.subprocess.run", lambda *a, **k: Proc())
     assert resolve_secret("TESTKEY") == ("from-env", "env")
 
 
@@ -92,6 +92,6 @@ def test_explicit_env_provider_never_touches_op(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("op must not run under provider='env'")
 
-    monkeypatch.setattr(secrets_mod.subprocess, "run", boom)
+    monkeypatch.setattr("secretpath.core.subprocess.run", boom)
     with pytest.raises(SecretResolutionError):
         resolve_secret("TESTKEY", provider="env")

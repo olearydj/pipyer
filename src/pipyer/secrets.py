@@ -10,10 +10,10 @@ records MUST NOT contain credentials (constitution, Operational Constraints).
 from __future__ import annotations
 
 import os
-import shutil
-import subprocess
 
-_cache: dict[str, tuple[str, str]] = {}
+from secretpath import SecretPathError
+from secretpath import clear_cache as _clear_secretpath_cache
+from secretpath import resolve_secret as _resolve_secretpath
 
 
 class SecretResolutionError(RuntimeError):
@@ -27,43 +27,23 @@ def resolve_secret(key: str, provider: str | None = None) -> tuple[str, str]:
     (`op read` of PIPYER_<KEY>_OP_REFERENCE), 'env' (the conventional env var),
     or 'auto' (1password then env).
     """
-    if key in _cache:
-        return _cache[key]
-    provider = provider or os.environ.get("PIPYER_SECRET_PROVIDER", "auto")
-    attempts: list[str] = []
+    selected_provider = provider or os.environ.get("PIPYER_SECRET_PROVIDER", "auto")
+    if selected_provider not in {"auto", "1password", "env"}:
+        raise SecretResolutionError(f"unknown secret provider {selected_provider!r}")
 
-    def from_1password() -> tuple[str, str] | None:
-        ref = os.environ.get(f"PIPYER_{key}_OP_REFERENCE")
-        if not ref:
-            attempts.append(f"1password: PIPYER_{key}_OP_REFERENCE not set")
-            return None
-        if not shutil.which("op"):
-            attempts.append("1password: `op` CLI not on PATH")
-            return None
-        proc = subprocess.run(["op", "read", ref], capture_output=True, text=True, timeout=30)
-        if proc.returncode != 0:
-            attempts.append(f"1password: op read failed ({proc.stderr.strip()[:120]})")
-            return None
-        return proc.stdout.strip(), "1password"
+    try:
+        result = _resolve_secretpath(
+            key,
+            provider=selected_provider,
+            op_reference_env=f"PIPYER_{key}_OP_REFERENCE",
+            env_var=key,
+        )
+    except SecretPathError as error:
+        raise SecretResolutionError(str(error)) from error
 
-    def from_env() -> tuple[str, str] | None:
-        value = os.environ.get(key)
-        if not value:
-            attempts.append(f"env: {key} not set")
-            return None
-        return value, "env"
-
-    legs = {"1password": [from_1password], "env": [from_env], "auto": [from_1password, from_env]}
-    if provider not in legs:
-        raise SecretResolutionError(f"unknown secret provider {provider!r}")
-    for leg in legs[provider]:
-        got = leg()
-        if got:
-            _cache[key] = got
-            return got
-    raise SecretResolutionError(f"could not resolve {key}; tried: {'; '.join(attempts)}")
+    return result.value, result.source
 
 
 def clear_cache() -> None:
     """Drop cached resolutions (test isolation; also lets a long process re-resolve)."""
-    _cache.clear()
+    _clear_secretpath_cache()

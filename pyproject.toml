@@ -7,6 +7,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-ai>=1.106.0",
     "pyyaml>=6.0",
+    "secretpath>=0.1.0",
     "typer>=0.12",
 ]
 
@@ -50,3 +51,6 @@ invalid-argument-type = "ignore"
 
 [tool.ty.src]
 exclude = ["spike/**"]
+
+[tool.uv.sources]
+secretpath = { path = "../secretpath" }

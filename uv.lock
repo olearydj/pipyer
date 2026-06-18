@@ -1721,6 +1721,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-ai" },
     { name = "pyyaml" },
+    { name = "secretpath" },
     { name = "typer" },
 ]
 
@@ -1739,6 +1740,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-ai", specifier = ">=1.106.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "secretpath", directory = "../secretpath" },
     { name = "typer", specifier = ">=0.12" },
 ]
 
@@ -2639,6 +2641,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/e0/1f/12417f7f493fc45e1
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2b/58/a58fc997655386daa2e25784e30c288aa3e3819e401f77029ee4899fb55a/s3transfer-0.18.0-py3-none-any.whl", hash = "sha256:239c13b09e65ad0346e1be7348b8a202dcad44ac7ea7c6eb858fc881dce739b6", size = 88572, upload-time = "2026-05-28T19:39:07.999Z" },
 ]
+
+[[package]]
+name = "secretpath"
+version = "0.1.0"
+source = { directory = "../secretpath" }
 
 [[package]]
 name = "secretstorage"
