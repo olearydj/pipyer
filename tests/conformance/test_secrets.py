@@ -23,13 +23,13 @@ def _clean(monkeypatch):
 
 def test_env_provider_returns_value_and_provider_name(monkeypatch):
     monkeypatch.setenv("TESTKEY", "s3cret")
-    assert resolve_secret("TESTKEY", provider="env") == ("s3cret", "env")
+    assert resolve_secret("TESTKEY", provider="env") == ("s3cret", "env:TESTKEY")
 
 
 def test_auto_falls_back_to_env_when_op_reference_unset(monkeypatch):
     monkeypatch.setenv("TESTKEY", "s3cret")
     secret, provider = resolve_secret("TESTKEY")  # auto
-    assert (secret, provider) == ("s3cret", "env")
+    assert (secret, provider) == ("s3cret", "env:TESTKEY")
 
 
 def test_1password_leg_reads_op_reference(monkeypatch):
@@ -70,7 +70,7 @@ def test_op_failure_falls_through_to_env_under_auto(monkeypatch):
         stderr = "op: not signed in"
 
     monkeypatch.setattr("secretpath.core.subprocess.run", lambda *a, **k: Proc())
-    assert resolve_secret("TESTKEY") == ("from-env", "env")
+    assert resolve_secret("TESTKEY") == ("from-env", "env:TESTKEY")
 
 
 def test_exhaustion_names_every_attempt():

@@ -2647,6 +2647,9 @@ name = "secretpath"
 version = "0.1.0"
 source = { directory = "../secretpath" }
 
+[package.metadata]
+requires-dist = [{ name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.0" }]
+
 [[package]]
 name = "secretstorage"
 version = "3.5.0"

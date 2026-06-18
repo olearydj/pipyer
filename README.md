@@ -21,6 +21,14 @@ uv run pytest -q
 
 Python tooling: `uv` only (never pip); build backend `uv_build`; ruff + ty.
 
+## Secrets
+
+Hosted-provider API keys resolve through `secretpath`. The shared names are
+`openai` and `anthropic`, normally declared in
+`~/.config/secretpath/config.toml`; `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
+remain environment fallbacks. `PIPYER_<KEY>_OP_REFERENCE` can still override the
+1Password reference for one run or project.
+
 ## Lineage
 
 Design history, ADRs (001-006), and the empirical evidence base live in the author's Obsidian vault at `projects/pipyer/` (private). This repo is self-contained; the vault is provenance, not a dependency. Predecessors and consumers: GradeBot (`/Volumes/Casa/dev/gradebot`), DEMA-LLM (`/Volumes/Casa/dev/dema-llm`), twc-bridge (`/Volumes/Casa/dev/twc-bridge`), danvas (`/Volumes/Casa/dev/danvas`), and the CLIDE specification (March 2026).
