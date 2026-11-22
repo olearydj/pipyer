@@ -1,0 +1,51 @@
+schema_version: "2"
+name: doc_extract_bench_docling
+description: Heavyweight second phase of the document extraction bench, restricted to the four Docling cells.
+
+inputs:
+  fixture_root:
+    type: path
+    required: false
+    default: fixtures
+  output_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.docling-artifacts
+  tool_cache_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.tool-cache
+
+matrix:
+  converter:
+    - docling
+  document:
+    - meeting-notes.docx
+    - software-doc.pdf
+    - marketing-deck.pptx
+    - ti-datasheet.pdf
+
+steps:
+  - name: convert
+    component: shell
+    config:
+      command:
+        - python3
+        - scripts/convert_stage.py
+      parse_stdout: json
+      timeout_s: 3600
+    inputs:
+      converter: matrix.converter
+      document: matrix.document
+      fixture_root: inputs.fixture_root
+      output_root: inputs.output_root
+      tool_cache_root: inputs.tool_cache_root
+
+settings:
+  concurrency: 1
+  max_failures: 1
+  max_failure_rate: 1.0
+  results_dir: ../../runs/doc-extract-bench/.pipyer-results
+
+outputs:
+  summary_conversion: steps.convert.stdout

@@ -1,0 +1,53 @@
+schema_version: "2"
+name: doc_extract_bench_round2_stability
+description: Re-run the round-1 Sonnet winner three times on the marketing deck.
+
+inputs:
+  fixture_root:
+    type: path
+    required: false
+    default: fixtures
+  output_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.round2-stability-artifacts
+  claude_sonnet_model:
+    type: string
+    required: false
+    default: claude-sonnet-5
+  claude_max_budget_usd:
+    type: number
+    required: false
+    default: 1.5
+
+matrix:
+  repeat:
+    - 1
+    - 2
+    - 3
+
+steps:
+  - name: convert
+    component: shell
+    config:
+      command:
+        - python3
+        - scripts/stability_sonnet_stage.py
+      parse_stdout: json
+      timeout_s: 1800
+    inputs:
+      repeat: matrix.repeat
+      document: marketing-deck.pptx
+      fixture_root: inputs.fixture_root
+      output_root: inputs.output_root
+      claude_sonnet_model: inputs.claude_sonnet_model
+      claude_max_budget_usd: inputs.claude_max_budget_usd
+
+settings:
+  concurrency: 1
+  max_failures: 1
+  max_failure_rate: 1.0
+  results_dir: ../../runs/doc-extract-bench/.pipyer-results
+
+outputs:
+  summary_conversion: steps.convert.stdout

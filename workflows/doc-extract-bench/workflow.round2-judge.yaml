@@ -1,0 +1,84 @@
+schema_version: "2"
+name: doc_extract_bench_round2_judge
+description: Run a blinded, randomized, cross-family pairwise visual-description panel.
+
+inputs:
+  pair_root:
+    type: path
+    required: true
+  output_root:
+    type: path
+    required: true
+  claude_judge_model:
+    type: string
+    required: false
+    default: claude-sonnet-5
+  claude_judge_max_budget_usd:
+    type: number
+    required: false
+    default: 0.3
+  codex_judge_model:
+    type: string
+    required: false
+    default: gpt-5.6-sol
+  codex_judge_reasoning_effort:
+    type: string
+    required: false
+    default: low
+
+matrix:
+  judge:
+    - claude
+    - codex
+  pair_id:
+    - pair-001
+    - pair-002
+    - pair-003
+    - pair-004
+    - pair-005
+    - pair-006
+    - pair-007
+    - pair-008
+    - pair-009
+    - pair-010
+    - pair-011
+    - pair-012
+    - pair-013
+    - pair-014
+    - pair-015
+    - pair-016
+    - pair-017
+    - pair-018
+    - pair-019
+    - pair-020
+    - pair-021
+    - pair-022
+    - pair-023
+
+steps:
+  - name: judge
+    component: shell
+    config:
+      command:
+        - python3
+        - scripts/judge_pair_stage.py
+      parse_stdout: json
+      timeout_s: 900
+    inputs:
+      judge: matrix.judge
+      pair_id: matrix.pair_id
+      pair_root: inputs.pair_root
+      output_root: inputs.output_root
+      claude_judge_model: inputs.claude_judge_model
+      claude_judge_max_budget_usd: inputs.claude_judge_max_budget_usd
+      codex_judge_model: inputs.codex_judge_model
+      codex_judge_reasoning_effort: inputs.codex_judge_reasoning_effort
+
+settings:
+  concurrency: 1
+  max_failures: 1
+  max_failure_rate: 1.0
+  results_dir: ../../runs/doc-extract-bench/.pipyer-results
+
+outputs:
+  summary_judgment: steps.judge.stdout

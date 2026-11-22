@@ -1,0 +1,69 @@
+schema_version: "2"
+name: doc_extract_bench_round2_convert
+description: Run only the new local-model ladder cells; round-1 outputs are reused, never rerun.
+
+inputs:
+  fixture_root:
+    type: path
+    required: false
+    default: fixtures
+    description: Locked benchmark fixtures, relative to this workflow unless absolute.
+  gold_root:
+    type: path
+    required: false
+    default: fixtures/gold
+    description: Draft gold references and visual-unit renders; must remain marked unverified.
+  output_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.round2-manual-artifacts
+    description: Per-cell artifacts; use a fresh path for every run.
+  tool_cache_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.tool-cache
+    description: Shared ignored cache containing pinned MLX packages and model snapshots.
+  round1_docling_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/2026-07-27-docling-01/artifacts/docling
+    description: Locked round-1 Docling outputs reused as the hybrid structure pass.
+
+matrix:
+  converter:
+    - docling_qwen3b_hybrid
+    - deepseek_ocr2_mlx
+    - dots_ocr_mlx
+    - qwen7b_hybrid
+  document:
+    - meeting-notes.docx
+    - software-doc.pdf
+    - marketing-deck.pptx
+    - ti-datasheet.pdf
+
+steps:
+  - name: convert
+    component: shell
+    config:
+      command:
+        - python3
+        - scripts/convert_round2_stage.py
+      parse_stdout: json
+      timeout_s: 10800
+    inputs:
+      converter: matrix.converter
+      document: matrix.document
+      fixture_root: inputs.fixture_root
+      gold_root: inputs.gold_root
+      output_root: inputs.output_root
+      tool_cache_root: inputs.tool_cache_root
+      round1_docling_root: inputs.round1_docling_root
+
+settings:
+  concurrency: 1
+  max_failures: 1
+  max_failure_rate: 1.0
+  results_dir: ../../runs/doc-extract-bench/.pipyer-results
+
+outputs:
+  summary_conversion: steps.convert.stdout

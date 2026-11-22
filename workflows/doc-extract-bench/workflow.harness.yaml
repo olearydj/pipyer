@@ -1,0 +1,85 @@
+schema_version: "2"
+name: doc_extract_bench_harness
+description: First-pass harness validation using MarkItDown and four agent/model paths over all locked fixtures.
+
+inputs:
+  fixture_root:
+    type: path
+    required: false
+    default: fixtures
+  output_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.harness-artifacts
+  tool_cache_root:
+    type: path
+    required: false
+    default: ../../runs/doc-extract-bench/.tool-cache
+  claude_opus_model:
+    type: string
+    required: false
+    default: claude-opus-5
+  claude_sonnet_model:
+    type: string
+    required: false
+    default: claude-sonnet-5
+  claude_max_budget_usd:
+    type: number
+    required: false
+    default: 5.0
+  codex_sol_model:
+    type: string
+    required: false
+    default: gpt-5.6-sol
+  codex_terra_model:
+    type: string
+    required: false
+    default: gpt-5.6-terra
+  codex_reasoning_effort:
+    type: string
+    required: false
+    default: low
+
+matrix:
+  converter:
+    - markitdown
+    - claude_opus_5
+    - claude_sonnet_5
+    - codex_sol
+    - codex_terra
+  document:
+    - meeting-notes.docx
+    - software-doc.pdf
+    - marketing-deck.pptx
+    - ti-datasheet.pdf
+
+steps:
+  - name: convert
+    component: shell
+    config:
+      command:
+        - python3
+        - scripts/convert_stage.py
+      parse_stdout: json
+      timeout_s: 3600
+    inputs:
+      converter: matrix.converter
+      document: matrix.document
+      fixture_root: inputs.fixture_root
+      output_root: inputs.output_root
+      tool_cache_root: inputs.tool_cache_root
+      claude_opus_model: inputs.claude_opus_model
+      claude_sonnet_model: inputs.claude_sonnet_model
+      claude_max_budget_usd: inputs.claude_max_budget_usd
+      codex_sol_model: inputs.codex_sol_model
+      codex_terra_model: inputs.codex_terra_model
+      codex_reasoning_effort: inputs.codex_reasoning_effort
+
+settings:
+  concurrency: 1
+  max_failures: 1
+  max_failure_rate: 1.0
+  results_dir: ../../runs/doc-extract-bench/.pipyer-results
+
+outputs:
+  summary_conversion: steps.convert.stdout

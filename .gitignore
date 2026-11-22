@@ -43,3 +43,11 @@ runs/dema-adjudication-matrix/*
 
 # Spike scratch output (evidence summarized into the spike report; raw output disposable)
 spike/results/
+
+# Local agent handoff notes
+.ho/
+
+# Benchmark source documents are private (internal correspondence); derived gold data stays local too
+workflows/doc-extract-bench/fixtures/
+workflows/doc-extract-bench/proposed-vault-update.md
+workflows/doc-extract-bench/scripts/build_gold.py
