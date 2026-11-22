@@ -257,9 +257,10 @@ def output_cell_dir(inputs: dict[str, Any]) -> Path:
 
 
 def dema_cmd(dema_repo: Path, log_path: Path) -> list[str]:
+    # Honor DEMA's committed uv configuration. --no-config would discard its
+    # exclude-newer policy and make --locked treat the committed lock as stale.
     return [
         "uv",
-        "--no-config",
         "run",
         "--locked",
         "--project",

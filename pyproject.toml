@@ -7,7 +7,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-ai>=1.106.0",
     "pyyaml>=6.0",
-    "secretpath>=0.1.0",
+    "secretpath>=0.2.0",
     "typer>=0.12",
 ]
 
@@ -52,5 +52,8 @@ invalid-argument-type = "ignore"
 [tool.ty.src]
 exclude = ["spike/**"]
 
-[tool.uv.sources]
-secretpath = { path = "../secretpath" }
+[tool.uv]
+# Keep the dependency cooldown in project configuration because uv records this
+# resolution policy in uv.lock. A user-only setting makes clean CI runners treat
+# the committed lock as stale because they do not inherit the user's uv config.
+exclude-newer = "3 days"
